@@ -5,10 +5,22 @@ from gymnasium import Env
 
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env import VecEnv
+from stable_baselines3.common.vec_env.base_vec_env import VecEnvObs
+import numpy as np
+
+
 from typing import Optional
 
-def run(model: BaseAlgorithm) -> None:
-    current_environment: Optional[VecEnv] = model.get_env()
+def run(model: BaseAlgorithm, run_steps:int = 1000) -> None:
+    current_environment: CustomEnv = model.get_env()
+
+    if current_environment is not None:
+        observation: np.ndarray = current_environment.reset()
+
+        for _ in range(run_steps):
+            action, state =  model.predict(observation, deterministic=True)
+            observation, reward, done, info =  current_environment.step(action)
+            current_environment.render("human")
 
 def main() -> None:
     environment: Env = CustomEnv()

@@ -18,15 +18,15 @@ class CustomEnv(gym.Env):
         # self.observation_space = spaces.Box(low=0, high=255,
         #                                     shape=(N_CHANNELS, HEIGHT, WIDTH), dtype=np.uint8)
 
-    def step(self, action):
+    def step(self, action) -> tuple[np.ndarray, float, bool, dict]:
         ...
         # return observation, reward, terminated, truncated, info
 
-    def reset(self, seed=None, options=None):
+    def reset(self, seed=None, options=None) -> np.ndarray:
         ...
         # return observation, info
 
-    def render(self):
+    def render(self, render_mode: str):
         ...
 
     def close(self):
