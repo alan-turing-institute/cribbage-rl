@@ -8,7 +8,7 @@ class CustomEnv(gym.Env):
 
     metadata = {"render_modes": ["human"], "render_fps": 30}
 
-    def __init__(self, arg1, arg2):
+    def __init__(self):
         super().__init__()
         # Define action and observation space
         # They must be gym.spaces objects
