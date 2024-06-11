@@ -1,6 +1,5 @@
 import random
 
-
 class Deck:
     """Deck of cards."""
     SUITS = {
@@ -11,19 +10,19 @@ class Deck:
     }
 
     RANKS = {
-        'ace': {'name': 'ace', 'symbol': 'A', 'value': 1, 'rank': 1, 'unicode_flag': '1', 'index': 1},
-        'two': {'name': 'two', 'symbol': '2', 'value': 2, 'rank': 2, 'unicode_flag': '2', 'index': 2},
-        'three': {'name': 'three', 'symbol': '3', 'value': 3, 'rank': 3, 'unicode_flag': '3', 'index': 3},
-        'four': {'name': 'four', 'symbol': '4', 'value': 4, 'rank': 4, 'unicode_flag': '4', 'index': 4},
-        'five': {'name': 'five', 'symbol': '5', 'value': 5, 'rank': 5, 'unicode_flag': '5', 'index': 5},
-        'six': {'name': 'six', 'symbol': '6', 'value': 6, 'rank': 6, 'unicode_flag': '6', 'index': 6},
-        'seven': {'name': 'seven', 'symbol': '7', 'value': 7, 'rank': 7, 'unicode_flag': '7', 'index': 7},
-        'eight': {'name': 'eight', 'symbol': '8', 'value': 8, 'rank': 8, 'unicode_flag': '8', 'index': 8},
-        'nine': {'name': 'nine', 'symbol': '9', 'value': 9, 'rank': 9, 'unicode_flag': '9', 'index': 9},
-        'ten': {'name': 'ten', 'symbol': '10', 'value': 10, 'rank': 10, 'unicode_flag': 'A', 'index': 10},
-        'jack': {'name': 'jack', 'symbol': 'J', 'value': 10, 'rank': 11, 'unicode_flag': 'B', 'index': 11},
-        'queen': {'name': 'queen', 'symbol': 'Q', 'value': 10, 'rank': 12, 'unicode_flag': 'D', 'index': 12},
-        'king': {'name': 'king', 'symbol': 'K', 'value': 10, 'rank': 13, 'unicode_flag': 'E', 'index': 13}
+        'ace': {'name': 'ace', 'symbol': 'A', 'value': 1, 'rank': 1, 'unicode_flag': '1', 'index': 0},
+        'two': {'name': 'two', 'symbol': '2', 'value': 2, 'rank': 2, 'unicode_flag': '2', 'index': 1},
+        'three': {'name': 'three', 'symbol': '3', 'value': 3, 'rank': 3, 'unicode_flag': '3', 'index': 2},
+        'four': {'name': 'four', 'symbol': '4', 'value': 4, 'rank': 4, 'unicode_flag': '4', 'index': 3},
+        'five': {'name': 'five', 'symbol': '5', 'value': 5, 'rank': 5, 'unicode_flag': '5', 'index': 4},
+        'six': {'name': 'six', 'symbol': '6', 'value': 6, 'rank': 6, 'unicode_flag': '6', 'index': 5},
+        'seven': {'name': 'seven', 'symbol': '7', 'value': 7, 'rank': 7, 'unicode_flag': '7', 'index': 6},
+        'eight': {'name': 'eight', 'symbol': '8', 'value': 8, 'rank': 8, 'unicode_flag': '8', 'index': 7},
+        'nine': {'name': 'nine', 'symbol': '9', 'value': 9, 'rank': 9, 'unicode_flag': '9', 'index': 8},
+        'ten': {'name': 'ten', 'symbol': '10', 'value': 10, 'rank': 10, 'unicode_flag': 'A', 'index': 9},
+        'jack': {'name': 'jack', 'symbol': 'J', 'value': 10, 'rank': 11, 'unicode_flag': 'B', 'index': 10},
+        'queen': {'name': 'queen', 'symbol': 'Q', 'value': 10, 'rank': 12, 'unicode_flag': 'D', 'index': 11},
+        'king': {'name': 'king', 'symbol': 'K', 'value': 10, 'rank': 13, 'unicode_flag': 'E', 'index': 12}
     }
 
     def __init__(self):

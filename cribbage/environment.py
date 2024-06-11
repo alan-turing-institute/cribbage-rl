@@ -7,7 +7,7 @@ import scoring
 class CardChoice(gym.spaces.MultiDiscrete):
 
     def __init__(self, nvec, start=None):
-        super().__init__(nvec, start=start)
+        super().__init__(nvec=nvec, start=start)
         self.hand = None
         self.encoded_hand = None
 
@@ -45,12 +45,11 @@ class CribbageEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(15)
 
         # Define Observation Space is hand of 6
-        # self.observation_space = CardChoice(
-        #     np.tile([4, 13], 6,).astype(np.int64),
-        #     start=np.zeros(12).astype(np.int64),
-        # )
+        self.observation_space = CardChoice(
+            np.tile([4, 13], 6,).astype(np.int64),
+        )
 
-        self.observation_space = gym.spaces.MultiDiscrete(np.tile([4, 13], 6,).astype(np.int64))
+        # self.observation_space = gym.spaces.MultiDiscrete(np.tile([4, 13], 6,).astype(np.int64))
 
         self._action_to_discard = {
             0: [0, 1],
@@ -81,9 +80,9 @@ class CribbageEnv(gym.Env):
         score = 0
         score_scenarios = [
             scoring.CountCombinationsEqualToN(n=15),
-            scoring.HasPairTripleQuad(),
+            scoring.HasPairTripleQuad_InHand(),
             scoring.HasStraight_InHand(),
-            scoring.HasFlush(),
+            scoring.HasFlushHand(),
         ]
         for scenario in score_scenarios:
             s, desc = scenario.check(cards[:])
@@ -92,21 +91,21 @@ class CribbageEnv(gym.Env):
         return score
 
     def step(self, action):
-        #print("STEP")
+        print("STEP")
 
-        #hand = self.observation_space.hand
+        hand = self.observation_space.hand
 
-        #print("Hand: ", hand)
+        print("Hand: ", hand)
 
         # Define Discard Cards
-        #discard_cards = self._action_to_discard[action]
+        discard_cards = self._action_to_discard[action]
 
         # Remove the discard cards from the hand
-        #hand = list(np.delete(hand, discard_cards))
-        #print("Hand after discard: ", hand)
+        hand = list(np.delete(hand, discard_cards))
+        print("Hand after discard: ", hand)
         # Calculate the reward
-        #reward = self._score_hand(hand)
-        reward=np.random.randint(0,29)
+        reward = self._score_hand(hand)
+        #reward=np.random.randint(0,29)
 
         # Get Next Hand
         observation = self.observation_space.sample()
