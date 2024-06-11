@@ -1,14 +1,15 @@
 import numpy as np
 import gymnasium as gym
-from playingcards import Deck 
+from playingcards import Deck
 import scoring
+
 
 class CardChoice(gym.spaces.MultiDiscrete):
 
     def __init__(self, nvec):
         super().__init__(nvec)
         self.hand = None
-        self.encoded_hand=None
+        self.encoded_hand = None
 
     def sample(self, mask=None):
         if mask is not None:
@@ -17,21 +18,21 @@ class CardChoice(gym.spaces.MultiDiscrete):
             self.hand = self._get_hand()
             self.encoded_hand = self._encode_hand(self.hand)
             return self.encoded_hand
-        
+
     def _get_hand(self):
         deck = Deck()
         deck.shuffle()
         card_hand = [deck.draw() for _ in range(6)]
         return card_hand
-    
+
     def _encode_hand(self, hand):
         """
-        Return array of shape (6, 2) where each entry is 
+        Return array of shape (6, 2) where each entry is
         (suit, rank) of the card in the hand.
         """
         encoded_hand = []
         for card in hand:
-            encoded_hand.append([card.suit['index'], card.rank['index']])
+            encoded_hand.append([card.suit["index"], card.rank["index"]])
         return np.array(encoded_hand)
 
 
@@ -41,7 +42,12 @@ class CribbageEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(15)
 
         # Define Observation Space is hand of 6
-        self.observation_space = CardChoice(np.tile([[4], [13]], 6,).T)
+        self.observation_space = CardChoice(
+            np.tile(
+                [[4], [13]],
+                6,
+            ).T
+        )
 
         self._action_to_discard = {
             0: [0, 1],
@@ -58,11 +64,10 @@ class CribbageEnv(gym.Env):
             11: [2, 5],
             12: [3, 4],
             13: [3, 5],
-            14: [4, 5]
+            14: [4, 5],
         }
 
         self.reward_range = (0, 29)
-
 
     def _score_hand(self, cards):
         """Score a hand at the end of a round.
@@ -71,8 +76,12 @@ class CribbageEnv(gym.Env):
         :return: Points earned by player.
         """
         score = 0
-        score_scenarios = [scoring.CountCombinationsEqualToN(n=15),
-                           scoring.HasPairTripleQuad(), scoring.HasStraight_InHand(), scoring.HasFlush()]
+        score_scenarios = [
+            scoring.CountCombinationsEqualToN(n=15),
+            scoring.HasPairTripleQuad(),
+            scoring.HasStraight_InHand(),
+            scoring.HasFlush(),
+        ]
         for scenario in score_scenarios:
             s, desc = scenario.check(cards[:])
             score += s
@@ -94,7 +103,7 @@ class CribbageEnv(gym.Env):
         # Calculate the reward
         reward = self._score_hand(hand)
 
-        # Get Next Hand 
+        # Get Next Hand
         observation = self.observation_space.sample()
 
         termination = False
@@ -102,9 +111,10 @@ class CribbageEnv(gym.Env):
         info = {}
         return observation, reward, termination, truncation, info
 
-    def reset(self):
-        return self.observation_space.sample()
-        
+    def reset(self, seed: int = 17):
+        info: dict = {}
+        return self.observation_space.sample(), info
+
     def render(self):
         pass
 
@@ -113,6 +123,7 @@ class CribbageEnv(gym.Env):
 
     def seed(self, seed=None):
         pass
+
 
 if __name__ == "__main__":
     cribbage_env = CribbageEnv()
