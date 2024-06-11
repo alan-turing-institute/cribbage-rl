@@ -2,7 +2,7 @@ import gymnasium as gym
 import numpy as np
 from environment import CribbageEnv
 from gymnasium import Env
-from stable_baselines3 import PPO
+from stable_baselines3 import A2C, PPO
 from stable_baselines3.common.base_class import BaseAlgorithm
 from stable_baselines3.common.env_checker import check_env
 from stable_baselines3.common.vec_env import VecEnv
