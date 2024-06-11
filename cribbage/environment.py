@@ -6,8 +6,8 @@ import scoring
 
 class CardChoice(gym.spaces.MultiDiscrete):
 
-    def __init__(self, nvec):
-        super().__init__(nvec)
+    def __init__(self, nvec, start=None):
+        super().__init__(nvec, start=start)
         self.hand = None
         self.encoded_hand = None
 
@@ -17,6 +17,7 @@ class CardChoice(gym.spaces.MultiDiscrete):
         else:
             self.hand = self._get_hand()
             self.encoded_hand = self._encode_hand(self.hand)
+            print("Sample Shape: ", self.encoded_hand.shape)
             return self.encoded_hand
 
     def _get_hand(self):
@@ -31,9 +32,11 @@ class CardChoice(gym.spaces.MultiDiscrete):
         (suit, rank) of the card in the hand.
         """
         encoded_hand = []
+
         for card in hand:
-            encoded_hand.append([card.suit["index"], card.rank["index"]])
-        return np.array(encoded_hand)
+            encoded_hand.append(card.suit["index"])
+            encoded_hand.append(card.rank["index"])
+        return np.array(encoded_hand).astype(np.int64)
 
 
 class CribbageEnv(gym.Env):
@@ -42,12 +45,12 @@ class CribbageEnv(gym.Env):
         self.action_space = gym.spaces.Discrete(15)
 
         # Define Observation Space is hand of 6
-        self.observation_space = CardChoice(
-            np.tile(
-                [[4], [13]],
-                6,
-            ).T
-        )
+        # self.observation_space = CardChoice(
+        #     np.tile([4, 13], 6,).astype(np.int64),
+        #     start=np.zeros(12).astype(np.int64),
+        # )
+
+        self.observation_space = gym.spaces.MultiDiscrete(np.tile([4, 13], 6,).astype(np.int64))
 
         self._action_to_discard = {
             0: [0, 1],
@@ -89,22 +92,26 @@ class CribbageEnv(gym.Env):
         return score
 
     def step(self, action):
+        #print("STEP")
 
-        hand = self.observation_space.hand
+        #hand = self.observation_space.hand
 
-        print("Hand: ", hand)
+        #print("Hand: ", hand)
 
         # Define Discard Cards
-        discard_cards = self._action_to_discard[action]
+        #discard_cards = self._action_to_discard[action]
 
         # Remove the discard cards from the hand
-        hand = list(np.delete(hand, discard_cards))
-        print("Hand after discard: ", hand)
+        #hand = list(np.delete(hand, discard_cards))
+        #print("Hand after discard: ", hand)
         # Calculate the reward
-        reward = self._score_hand(hand)
+        #reward = self._score_hand(hand)
+        reward=np.random.randint(0,29)
 
         # Get Next Hand
         observation = self.observation_space.sample()
+
+        #print(self.observation_space.contains(observation))
 
         termination = False
         truncation = False
@@ -113,7 +120,9 @@ class CribbageEnv(gym.Env):
 
     def reset(self, seed: int = 17):
         info: dict = {}
-        return self.observation_space.sample(), info
+        #print('RESET')
+        obs = self.observation_space.sample()
+        return obs, info
 
     def render(self):
         pass

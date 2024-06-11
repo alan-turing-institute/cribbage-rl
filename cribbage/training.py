@@ -11,7 +11,7 @@ from environment import CribbageEnv
 
 
 def run(
-    model: BaseAlgorithm, run_steps: int = 1000, render_mode="human"
+    model: BaseAlgorithm, run_steps: int = 5, render_mode="human"
 ) -> None:
     current_environment: Env = model.get_env()
 
@@ -20,10 +20,20 @@ def run(
 
         for _ in range(run_steps):
             action, state = model.predict(observation, deterministic=True)
-            observation, reward, termination, truncation, info = (
+            print(f"-------------- {_} --------------")
+            print("Action: ", action)
+            print("Observation: ", observation)
+            observation, reward, termination, truncation = (
                 current_environment.step(action)
             )
-            current_environment.render(render_mode=render_mode)
+            print("Observation after step: ", observation)
+            print("Reward: ", reward)
+            
+            #urrent_environment.step(action)
+            #current_environment.render(render_mode=render_mode)
+
+    
+    return model
 
 
 def train(
