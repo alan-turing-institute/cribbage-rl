@@ -1,7 +1,7 @@
-import numpy as np
 import gymnasium as gym
-from playingcards import Deck
+import numpy as np
 import scoring
+from playingcards import Deck
 
 
 class CardChoice(gym.spaces.MultiDiscrete):
@@ -17,7 +17,6 @@ class CardChoice(gym.spaces.MultiDiscrete):
         else:
             self.hand = self._get_hand()
             self.encoded_hand = self._encode_hand(self.hand)
-            print("Sample Shape: ", self.encoded_hand.shape)
             return self.encoded_hand
 
     def _get_hand(self):
@@ -46,8 +45,13 @@ class CribbageEnv(gym.Env):
 
         # Define Observation Space is hand of 6
         self.observation_space = CardChoice(
-            np.tile([4, 13], 6,).astype(np.int64),
+            np.tile(
+                [4, 13],
+                6,
+            ).astype(np.int64),
         )
+
+        self.old_state = [[], [], [], 0]
 
         # self.observation_space = gym.spaces.MultiDiscrete(np.tile([4, 13], 6,).astype(np.int64))
 
@@ -87,30 +91,35 @@ class CribbageEnv(gym.Env):
         for scenario in score_scenarios:
             s, desc = scenario.check(cards[:])
             score += s
-            print("[EOR SCORING] " + desc) if desc else None
+            # print("[EOR SCORING] " + desc) if desc else None
         return score
 
     def step(self, action):
-        print("STEP")
-
         hand = self.observation_space.hand
 
-        print("Hand: ", hand)
+        self.old_state[0] = hand
+
+        # print("Hand: ", hand)
 
         # Define Discard Cards
         discard_cards = self._action_to_discard[action]
 
+        self.old_state[1] = [hand[discard_cards[0]], hand[discard_cards[1]]]
+
         # Remove the discard cards from the hand
         hand = list(np.delete(hand, discard_cards))
-        print("Hand after discard: ", hand)
+        # print("Hand after discard: ", hand)
         # Calculate the reward
         reward = self._score_hand(hand)
-        #reward=np.random.randint(0,29)
+        # reward=np.random.randint(0,29)
+
+        self.old_state[2] = hand
+        self.old_state[3] = reward
 
         # Get Next Hand
         observation = self.observation_space.sample()
 
-        #print(self.observation_space.contains(observation))
+        # print(self.observation_space.contains(observation))
 
         termination = False
         truncation = False
@@ -119,12 +128,18 @@ class CribbageEnv(gym.Env):
 
     def reset(self, seed: int = 17):
         info: dict = {}
-        #print('RESET')
+        # print('RESET')
         obs = self.observation_space.sample()
         return obs, info
 
-    def render(self):
+    def render(self, render_mode="human"):
         pass
+
+    def display_play(self):
+        print("Starting Hand: " + str(self.old_state[0]))
+        print("Discarded Cards: " + str(self.old_state[1]))
+        print("Chosen Cards: " + str(self.old_state[2]))
+        print("Reward: " + str(self.old_state[3]))
 
     def close(self):
         pass
