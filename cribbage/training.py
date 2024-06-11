@@ -21,6 +21,15 @@ def run(model: BaseAlgorithm, run_steps: int = 5, render_mode="human") -> None:
             current_environment.step(action)
             current_environment.env_method("display_play")
 
+        reward_vals = []
+
+        for _ in range(1000):
+            action, state = model.predict(observation, deterministic=True)
+            observation, reward, done, info = current_environment.step(action)
+            reward_vals.append(reward)
+
+        print(f"Average Reward: {np.mean(reward_vals)}")
+
     return model
 
 
@@ -39,7 +48,7 @@ def main() -> None:
     # environment: Env = gym.make("LunarLander-v2", render_mode="human")
     check_env(environment)
 
-    total_timesteps: int = 100_000
+    total_timesteps: int = 1_000_000
     model: BaseAlgorithm = train(environment, total_timesteps)
 
     run(model)
