@@ -1,4 +1,4 @@
-from stable_baselines3 import PPO
+from stable_baselines3 import PPO, A2C
 from stable_baselines3.common.base_class import BaseAlgorithm
 from gymnasium import Env
 import gymnasium as gym
@@ -41,7 +41,7 @@ def train(
 ) -> BaseAlgorithm:
     current_environment.reset()
 
-    model: BaseAlgorithm = PPO(
+    model: BaseAlgorithm = A2C(
         "MlpPolicy", current_environment, verbose=verbose
     )
     model.learn(total_timesteps=total_timesteps)

@@ -2,3 +2,4 @@ stable-baselines3
 mypy
 black
 ray[data,train,tune,serve]
+cribbage-scorer
