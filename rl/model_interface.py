@@ -14,48 +14,58 @@ def run(model_file):
     click.echo(f"Loading model {model_file}")
     model = PPO.load(model_file)
 
-    card_ranks = []
-    card_suits = []
-    is_dealer = False
+    keep_playing = True
 
-    is_dealer = click.prompt("Are you dealer? ", type=bool)
+    while keep_playing:
 
-    for i in range(1, 7):
-        card_suit = click.prompt(f"Card {i} suit: ", type=str)
-        if card_suit not in ALL_SUITS:
-            click.echo(f"Invalid suit: {card_suit}, please use one of {ALL_SUITS}")
-            raise click.Abort()
-        card_rank = click.prompt(f"Card {i} rank: ", type=int)
-        if card_rank < 1 or card_rank > 13:
-            click.echo(
-                f"Invalid rank: {card_rank}, please use a number between 1 and 13"
+        card_ranks = []
+        card_suits = []
+        is_dealer = False
+
+        is_dealer = click.prompt("Are you dealer? ", type=bool)
+
+        for i in range(1, 7):
+            card_suit = click.prompt(f"Card {i} suit: ", type=str)
+            if card_suit not in ALL_SUITS:
+                click.echo(f"Invalid suit: {card_suit}, please use one of {ALL_SUITS}")
+                raise click.Abort()
+            card_rank = click.prompt(f"Card {i} rank: ", type=int)
+            if card_rank < 1 or card_rank > 13:
+                click.echo(
+                    f"Invalid rank: {card_rank}, please use a number between 1 and 13"
+                )
+                raise click.Abort()
+
+            card_suits.append(card_suit)
+            card_ranks.append(card_rank)
+
+        suit_to_number = {suit: i for i, suit in enumerate(ALL_SUITS)}
+
+        observation = {}
+
+        for n, (card_rank, card_suit) in enumerate(zip(card_ranks, card_suits)):
+            observation[f"card_{n}"] = np.array(
+                [card_rank - 1, suit_to_number[card_suit]]
             )
-            raise click.Abort()
 
-        card_suits.append(card_suit)
-        card_ranks.append(card_rank)
+        observation["is_dealer"] = np.array([is_dealer])
 
-    suit_to_number = {suit: i for i, suit in enumerate(ALL_SUITS)}
+        action, _state = model.predict(observation, deterministic=True)
 
-    observation = {}
+        cards_to_drop = POSSIBLE_ACTIONS[action[0]]
 
-    for n, (card_rank, card_suit) in enumerate(zip(card_ranks, card_suits)):
-        observation[f"card_{n}"] = np.array([card_rank - 1, suit_to_number[card_suit]])
+        click.echo(
+            f"Drop card {cards_to_drop[0] + 1}, "
+            f" {card_suits[cards_to_drop[0]]} {card_ranks[cards_to_drop[0]]}"
+        )
+        click.echo(
+            f"Drop card {cards_to_drop[1] + 1}, "
+            f" {card_suits[cards_to_drop[1]]} {card_ranks[cards_to_drop[1]]}"
+        )
 
-    observation["is_dealer"] = np.array([is_dealer])
+        keep_playing = click.prompt("Do you want to keep playing?", type=bool)
 
-    action, _state = model.predict(observation, deterministic=True)
-
-    cards_to_drop = POSSIBLE_ACTIONS[action[0]]
-
-    click.echo(
-        f"Drop card {cards_to_drop[0] + 1}, "
-        f" {card_suits[cards_to_drop[0]]} {card_ranks[cards_to_drop[0]]}"
-    )
-    click.echo(
-        f"Drop card {cards_to_drop[1] + 1}, "
-        f" {card_suits[cards_to_drop[1]]} {card_ranks[cards_to_drop[1]]}"
-    )
+    click.echo("Thank you for a lovely game of cribbage!")
 
 
 if __name__ == "__main__":
