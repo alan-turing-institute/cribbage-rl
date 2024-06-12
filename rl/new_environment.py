@@ -1,7 +1,7 @@
 import logging
 import random
 from itertools import combinations
-from typing import Optional
+from typing import Optional, Union
 
 import gymnasium as gym
 import matplotlib.pyplot as plt
@@ -10,13 +10,15 @@ import pandas as pd
 import seaborn as sns
 from cribbage_scorer import cribbage_scorer
 from gymnasium import spaces
-from stable_baselines3 import A2C, PPO
+from stable_baselines3 import PPO
 
 CARDS_IN_HAND: int = 6
 CARDS_TO_DISCARD: int = 2
 ALL_SUITS: list[str] = ["D", "S", "C", "H"]
 
-SUIT_TO_NUMBER: dict[str, int] = {suit: index for index, suit in enumerate(ALL_SUITS)}
+SUIT_TO_NUMBER: dict[str, int] = {
+    suit: index for index, suit in enumerate(ALL_SUITS)
+}
 
 
 class CribbageEnv(gym.Env):
@@ -31,7 +33,7 @@ class CribbageEnv(gym.Env):
                     f"card_{card_index}": spaces.Box(
                         low=np.array([0, 0]),
                         high=np.array([13, 4]),
-                        dtype=np.float32,
+                        dtype=np.int64,
                     )
                     for card_index in range(CARDS_IN_HAND)
                 },
@@ -39,7 +41,9 @@ class CribbageEnv(gym.Env):
         )
 
         card_indexes: list[int] = list(range(CARDS_IN_HAND))
-        self.potential_moves: list = list(combinations(card_indexes, CARDS_TO_DISCARD))
+        self.potential_moves: list = list(
+            combinations(card_indexes, CARDS_TO_DISCARD)
+        )
 
         self.action_space = spaces.Discrete(len(self.potential_moves))
 
@@ -61,9 +65,11 @@ class CribbageEnv(gym.Env):
         is_dealer: int = random.choice([0, 1])
         self.is_dealer = is_dealer
 
-        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(self.current_hand)
+        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(
+            self.current_hand
+        )
 
-        observation: dict[str, np.ndarray] = {
+        observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
             **encoded_hand,
             "is_dealer": np.array([is_dealer]),
         }
@@ -118,9 +124,11 @@ class CribbageEnv(gym.Env):
             f"{crib_msg=} {reward=}"
         )
 
-        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(self.current_hand)
+        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(
+            self.current_hand
+        )
 
-        observation: dict[str, np.ndarray] = {
+        observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
             **encoded_hand,
             "is_dealer": np.array([self.is_dealer]),
         }
@@ -163,8 +171,8 @@ def run(model=None, run_steps: int = 5) -> list[int]:
         else:
             action, _state = model.predict(observation, deterministic=True)
 
-        observation, reward, terminated, truncated, info = current_environment.step(
-            action
+        observation, reward, terminated, truncated, info = (
+            current_environment.step(action)
         )
         rewards.append(reward)
         # current_environment.render()
@@ -219,22 +227,22 @@ if __name__ == "__main__":
 
     model = train(total_timesteps)
 
-    model_close_look(model)
+    # model_close_look(model)
 
-    # model_rewards: list[int] = run(model, run_steps=run_steps)
-    # random_rewards: list[int] = run(run_steps=run_steps)
+    model_rewards: list[int] = run(model, run_steps=run_steps)
+    random_rewards: list[int] = run(run_steps=run_steps)
 
-    # print(f"{np.mean(model_rewards)=}")
-    # print(f"{np.mean(random_rewards)=}")
+    print(f"{np.mean(model_rewards)=}")
+    print(f"{np.mean(random_rewards)=}")
 
-    # data: pd.DataFrame = pd.DataFrame(
-    #     {
-    #         "approach": ["random" for _ in range(len(random_rewards))]
-    #         + ["model" for _ in range(len(model_rewards))],
-    #         "score": random_rewards + model_rewards,
-    #     }
-    # )
+    data: pd.DataFrame = pd.DataFrame(
+        {
+            "approach": ["random" for _ in range(len(random_rewards))]
+            + ["model" for _ in range(len(model_rewards))],
+            "score": random_rewards + model_rewards,
+        }
+    )
 
-    # axes = sns.boxplot(data=data, x="score", y="approach")
-    # plt.savefig("reward_plot.png")
-    # plt.show()
+    axes = sns.boxplot(data=data, x="score", y="approach")
+    plt.savefig("reward_plot.png")
+    plt.show()
