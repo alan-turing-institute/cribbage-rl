@@ -186,8 +186,16 @@ def get_deck() -> list[tuple[int, str]]:
 
 def train(total_timesteps=10_000):
     current_environment = CribbageEnv()
-    model = PPO("MultiInputPolicy", current_environment, verbose=1)
-    model.learn(total_timesteps=total_timesteps)
+    model = PPO(
+        "MultiInputPolicy",
+        current_environment,
+        verbose=1,
+        tensorboard_log="cribbage_tensorboard_log",
+    )
+    model.learn(
+        total_timesteps=total_timesteps,
+        progress_bar=True,
+    )
 
     return model
 
@@ -207,7 +215,7 @@ if __name__ == "__main__":
     print("Getting reference scores...")
 
     run_steps: int = 1000
-    total_timesteps: int = 100_000
+    total_timesteps: int = 1_000_000
 
     model = train(total_timesteps)
 
