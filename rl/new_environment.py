@@ -6,9 +6,10 @@ import random
 from cribbage_scorer import cribbage_scorer
 from typing import Optional
 from stable_baselines3 import A2C
-
+import pandas as pd
 import logging
-
+import seaborn as sns
+import matplotlib.pyplot as plt
 
 CARDS_IN_HAND: int = 6
 CARDS_TO_DISCARD: int = 2
@@ -181,7 +182,19 @@ if __name__ == "__main__":
     # model_close_look(model)
 
     model_rewards: list[int] = run(model, run_steps=run_steps)
-    print(f"{np.mean(model_rewards)=}")
-
     random_rewards: list[int] = run(run_steps=run_steps)
+
+    print(f"{np.mean(model_rewards)=}")
     print(f"{np.mean(random_rewards)=}")
+
+    data: pd.DataFrame = pd.DataFrame(
+        {
+            "approach": ["random" for _ in range(len(random_rewards))]
+            + ["model" for _ in range(len(model_rewards))],
+            "score": random_rewards + model_rewards,
+        }
+    )
+
+    axes = sns.boxplot(data=data, x="score", y="approach")
+    plt.savefig("reward_plot.png")
+    plt.show()

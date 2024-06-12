@@ -3,3 +3,4 @@ mypy
 black
 ray[data,train,tune,serve]
 cribbage-scorer
+seaborn
