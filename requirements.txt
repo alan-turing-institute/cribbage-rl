@@ -6,3 +6,4 @@ seaborn
 tensorboard
 tqdm
 rich
+click

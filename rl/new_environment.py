@@ -100,7 +100,7 @@ class CribbageEnv(gym.Env):
         ]
 
         reward, msg = cribbage_scorer.show_calc_score(
-        self.starter_card,
+            self.starter_card,
             hand_after_discard,
             crib=False,
         )
