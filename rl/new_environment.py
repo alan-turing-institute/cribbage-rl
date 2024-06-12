@@ -10,7 +10,7 @@ import numpy as np
 from itertools import combinations
 import random
 from cribbage_scorer import cribbage_scorer
-from typing import Optional
+from typing import Optional, Final
 from stable_baselines3 import A2C
 import pandas as pd
 import seaborn as sns
@@ -59,6 +59,7 @@ class CribbageEnv(gym.Env):
         del current_deck[0]
 
         self.current_hand = current_deck[-CARDS_IN_HAND:]
+        self.dealt_hand = self.current_hand.copy()
         del current_deck[-CARDS_IN_HAND:]
 
         self.opponent_crib = current_deck[-CARDS_TO_DISCARD:]
@@ -80,12 +81,19 @@ class CribbageEnv(gym.Env):
     def render(self):
         return f"Hand: {self.current_hand} Starter: {self.starter_card}"
 
-    def get_greedy_action(self):
-        pass
+    def get_greedy_hand(self):
+        rewards = []
+        for action in range(len(self.potential_moves)):
+            original_hand, hand_after_discard, reward = self.discard(action)
+            self.current_hand = self.dealt_hand.copy()
+            rewards.append(reward)
+
+        best_action = np.argmax(rewards)
+
+        return self.discard(best_action)
 
     def discard(self, action):
         cards_to_discard: tuple[int, int] = self.potential_moves[action]
-        original_hand = self.current_hand.copy()
         for index_to_delete in cards_to_discard:
                 self.current_hand[index_to_delete] = None
 
@@ -98,7 +106,7 @@ class CribbageEnv(gym.Env):
                     hand_after_discard,
                     crib=False,
                 )
-        return original_hand, hand_after_discard, reward
+        return self.dealt_hand, hand_after_discard, reward
 
     def step(self, action) -> tuple:
         logging.debug(f"{action=}")
