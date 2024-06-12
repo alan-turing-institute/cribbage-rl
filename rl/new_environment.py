@@ -33,7 +33,7 @@ class CribbageEnv(gym.Env):
                     f"card_{card_index}": spaces.Box(
                         low=np.array([0, 0]),
                         high=np.array([13, 4]),
-                        dtype=np.float32,
+                        dtype=np.int64,
                     )
                     for card_index in range(CARDS_IN_HAND)
                 },
