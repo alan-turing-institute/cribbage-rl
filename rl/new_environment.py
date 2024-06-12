@@ -1,24 +1,28 @@
+import logging
+import random
+from datetime import datetime
+from itertools import combinations
+from typing import Optional, Union
 import time
 import gymnasium as gym
-from gymnasium import spaces
+import matplotlib.pyplot as plt
 import numpy as np
 from itertools import combinations
 import random
 from cribbage_scorer import cribbage_scorer
-from typing import Optional, Final
+from typing import Optional
 from stable_baselines3 import A2C
 import pandas as pd
-import logging
 import seaborn as sns
-import matplotlib.pyplot as plt
+from cribbage_scorer import cribbage_scorer
+from gymnasium import spaces
+from stable_baselines3 import PPO
 
 CARDS_IN_HAND: Final[int] = 6
 CARDS_TO_DISCARD: Final[int] = 2
 ALL_SUITS: Final[list[str]] = ["D", "S", "C", "H"]
 
-SUIT_TO_NUMBER: dict[str, int] = {
-    suit: index for index, suit in enumerate(ALL_SUITS)
-}
+SUIT_TO_NUMBER: dict[str, int] = {suit: index for index, suit in enumerate(ALL_SUITS)}
 
 
 class CribbageEnv(gym.Env):
@@ -28,19 +32,20 @@ class CribbageEnv(gym.Env):
 
         self.observation_space = spaces.Dict(
             {
-                f"card_{card_index}": spaces.Box(
-                    low=np.array([0, 0]),
-                    high=np.array([13, 4]),
-                    dtype=np.float32,
-                )
-                for card_index in range(CARDS_IN_HAND)
+                **{"is_dealer": spaces.Discrete(2)},
+                **{
+                    f"card_{card_index}": spaces.Box(
+                        low=np.array([0, 0]),
+                        high=np.array([13, 4]),
+                        dtype=np.int64,
+                    )
+                    for card_index in range(CARDS_IN_HAND)
+                },
             }
         )
 
         card_indexes: list[int] = list(range(CARDS_IN_HAND))
-        self.potential_moves: list = list(
-            combinations(card_indexes, CARDS_TO_DISCARD)
-        )
+        self.potential_moves: list = list(combinations(card_indexes, CARDS_TO_DISCARD))
 
         self.action_space = spaces.Discrete(len(self.potential_moves))
 
@@ -56,13 +61,21 @@ class CribbageEnv(gym.Env):
         self.current_hand = current_deck[-CARDS_IN_HAND:]
         del current_deck[-CARDS_IN_HAND:]
 
-        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(
-            self.current_hand
-        )
+        self.opponent_crib = current_deck[-CARDS_TO_DISCARD:]
+        del current_deck[-CARDS_TO_DISCARD:]
 
+        is_dealer: int = random.choice([0, 1])
+        self.is_dealer = is_dealer
+
+        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(self.current_hand)
+
+        observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
+            **encoded_hand,
+            "is_dealer": np.array([is_dealer]),
+        }
         info: dict = {}
 
-        return encoded_hand, info
+        return observation, info
 
     def render(self):
         return f"Hand: {self.current_hand} Starter: {self.starter_card}"
@@ -92,9 +105,14 @@ class CribbageEnv(gym.Env):
         logging.debug(f"{self.starter_card=}")
         logging.debug(f"{self.current_hand=}")
 
+        action = action if isinstance(action, np.int64) else action[0]
+
+        crib_cards: list[tuple[int, str]] = self.opponent_crib
+
         cards_to_discard: tuple[int, int] = self.potential_moves[action]
         logging.debug(f"{cards_to_discard=}")
         for index_to_delete in cards_to_discard:
+            crib_cards.append(self.current_hand[index_to_delete])
             self.current_hand[index_to_delete] = None
 
         hand_after_discard: list = [
@@ -108,16 +126,35 @@ class CribbageEnv(gym.Env):
             crib=False,
         )
 
-        logging.debug(f"{reward=} {msg=}")
+        hand_reward = reward
 
-        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(
-            self.current_hand
+        crib_reward, crib_msg = cribbage_scorer.show_calc_score(
+            self.starter_card,
+            crib_cards,
+            crib=True,
         )
+
+        if self.is_dealer:
+            reward += crib_reward
+        else:
+            reward -= crib_reward
+
+        logging.debug(
+            f"{self.is_dealer=} {hand_reward=} {msg=} {crib_reward=} "
+            f"{crib_msg=} {reward=}"
+        )
+
+        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(self.current_hand)
+
+        observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
+            **encoded_hand,
+            "is_dealer": np.array([self.is_dealer]),
+        }
 
         terminated: bool = True
         info: dict = {}
 
-        return encoded_hand, reward, terminated, False, info
+        return observation, reward, terminated, False, info
 
 
 def encode_hand(current_hand) -> dict[str, Optional[np.ndarray]]:
@@ -152,8 +189,8 @@ def run(model=None, run_steps: int = 5) -> list[int]:
         else:
             action, _state = model.predict(observation, deterministic=True)
 
-        observation, reward, terminated, truncated, info = (
-            current_environment.step(action)
+        observation, reward, terminated, truncated, info = current_environment.step(
+            action
         )
         rewards.append(reward)
         # current_environment.render()
@@ -175,8 +212,20 @@ def get_deck() -> list[tuple[int, str]]:
 
 def train(total_timesteps=10_000, model_args={}):
     current_environment = CribbageEnv()
-    model = A2C("MultiInputPolicy", current_environment, verbose=1, **model_args)
-    model.learn(total_timesteps=total_timesteps, progress_bar=True)
+    model = PPO(
+        "MultiInputPolicy",
+        current_environment,
+        verbose=1,
+        batch_size=512,
+        tensorboard_log="cribbage_tensorboard_log",
+        **model_args)
+    model.learn(
+        total_timesteps=total_timesteps, progress_bar=True,
+    )
+
+    model.save(
+        f"saved_models/random_cards_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    )
 
     return model
 
@@ -200,7 +249,7 @@ def get_greedy_action(environment):
 if __name__ == "__main__":
     print("Getting reference scores...")
 
-    run_steps: int = 1_000
+    run_steps: int = 1000
     total_timesteps: int = 10_000
 
     start = time.time()

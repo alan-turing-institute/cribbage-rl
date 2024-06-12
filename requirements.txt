@@ -3,4 +3,10 @@ mypy
 black
 cribbage-scorer
 seaborn
+<<<<<<< HEAD
 tqdm
+=======
+tensorboard
+tqdm
+rich
+>>>>>>> 247a227c6a1a122a738daba71538c4dd8702ebee
