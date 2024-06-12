@@ -100,6 +100,8 @@ class CribbageEnv(gym.Env):
             crib=False,
         )
 
+        hand_reward = reward
+
         crib_reward, crib_msg = cribbage_scorer.show_calc_score(
             self.starter_card,
             crib_cards,
@@ -111,7 +113,10 @@ class CribbageEnv(gym.Env):
         else:
             reward -= crib_reward
 
-        logging.debug(f"{reward=} {msg=}")
+        logging.debug(
+            f"{self.is_dealer=} {hand_reward=} {msg=} {crib_reward=} "
+            f"{crib_msg=} {reward=}"
+        )
 
         encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(self.current_hand)
 
@@ -206,22 +211,22 @@ if __name__ == "__main__":
 
     model = train(total_timesteps)
 
-    # model_close_look(model)
+    model_close_look(model)
 
-    model_rewards: list[int] = run(model, run_steps=run_steps)
-    random_rewards: list[int] = run(run_steps=run_steps)
+    # model_rewards: list[int] = run(model, run_steps=run_steps)
+    # random_rewards: list[int] = run(run_steps=run_steps)
 
-    print(f"{np.mean(model_rewards)=}")
-    print(f"{np.mean(random_rewards)=}")
+    # print(f"{np.mean(model_rewards)=}")
+    # print(f"{np.mean(random_rewards)=}")
 
-    data: pd.DataFrame = pd.DataFrame(
-        {
-            "approach": ["random" for _ in range(len(random_rewards))]
-            + ["model" for _ in range(len(model_rewards))],
-            "score": random_rewards + model_rewards,
-        }
-    )
+    # data: pd.DataFrame = pd.DataFrame(
+    #     {
+    #         "approach": ["random" for _ in range(len(random_rewards))]
+    #         + ["model" for _ in range(len(model_rewards))],
+    #         "score": random_rewards + model_rewards,
+    #     }
+    # )
 
-    axes = sns.boxplot(data=data, x="score", y="approach")
-    plt.savefig("reward_plot.png")
-    plt.show()
+    # axes = sns.boxplot(data=data, x="score", y="approach")
+    # plt.savefig("reward_plot.png")
+    # plt.show()
