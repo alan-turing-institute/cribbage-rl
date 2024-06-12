@@ -7,3 +7,4 @@ tensorboard
 tqdm
 rich
 click
+torch-tb-profiler

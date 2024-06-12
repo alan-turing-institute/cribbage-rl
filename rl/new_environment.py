@@ -12,13 +12,22 @@ import pandas as pd
 import seaborn as sns
 from cribbage_scorer import cribbage_scorer
 from gymnasium import spaces
-from stable_baselines3 import A2C, PPO
+from stable_baselines3 import PPO
+from stable_baselines3.common.base_class import BaseAlgorithm
 
 CARDS_IN_HAND: Final[int] = 6
 CARDS_TO_DISCARD: Final[int] = 2
 ALL_SUITS: Final[list[str]] = ["D", "S", "C", "H"]
+CRIBBAGE_POINTS: str = "cribbage_points"
+AGENT_PLAYER: str = "agent"
+OPPONENT_PLAYER: str = "opponent"
 
-SUIT_TO_NUMBER: dict[str, int] = {suit: index for index, suit in enumerate(ALL_SUITS)}
+TARGET_SCORE: int = 131
+AGENT_VICTORY: str = "agent_victory"
+
+SUIT_TO_NUMBER: dict[str, int] = {
+    suit: index for index, suit in enumerate(ALL_SUITS)
+}
 
 
 class CribbageEnv(gym.Env):
@@ -43,13 +52,25 @@ class CribbageEnv(gym.Env):
         self.reward_range = (-30, 60)
 
         card_indexes: list[int] = list(range(CARDS_IN_HAND))
-        self.potential_moves: list = list(combinations(card_indexes, CARDS_TO_DISCARD))
+        self.potential_moves: list = list(
+            combinations(card_indexes, CARDS_TO_DISCARD)
+        )
 
         self.action_space = spaces.Discrete(len(self.potential_moves))
 
     def reset(self, seed=None, options=None) -> tuple:
         super().reset(seed=seed)
 
+        self.is_dealer: Optional[int] = None
+        self.player_score: int = 0
+        self.opponent_score: int = 0
+
+        info: dict = {}
+        # TODO: Temporal workaround.
+        self.start_round()
+        return self.encode_observation(), info
+
+    def start_round(self) -> None:
         current_deck: list[tuple[int, str]] = get_deck()
         random.shuffle(current_deck)
 
@@ -60,21 +81,29 @@ class CribbageEnv(gym.Env):
         self.dealt_hand = self.current_hand.copy()
         del current_deck[-CARDS_IN_HAND:]
 
-        self.opponent_crib = current_deck[-CARDS_TO_DISCARD:]
-        del current_deck[-CARDS_TO_DISCARD:]
+        self.opponent_hand: list[tuple[int, str]] = current_deck[
+            -CARDS_IN_HAND:
+        ]
+        del current_deck[-CARDS_IN_HAND:]
 
-        is_dealer: int = random.choice([0, 1])
-        self.is_dealer = is_dealer
+        if self.is_dealer is None:
+            self.is_dealer = random.choice([0, 1])
+        else:
+            self.is_dealer = 0 if self.is_dealer == 1 else 0
 
-        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(self.current_hand)
+    def encode_observation(
+        self,
+    ) -> dict[str, Union[bool, Optional[np.ndarray]]]:
+        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(
+            self.current_hand
+        )
 
         observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
             **encoded_hand,
-            "is_dealer": np.array([is_dealer]),
+            "is_dealer": np.array([self.is_dealer]),
         }
-        info: dict = {}
 
-        return observation, info
+        return observation
 
     def render(self):
         return f"Hand: {self.current_hand} Starter: {self.starter_card}"
@@ -90,12 +119,12 @@ class CribbageEnv(gym.Env):
 
         return self.discard(best_action)
 
-    def discard(self, action):
+    def discard(self, action) -> tuple:
         cards_to_discard: tuple[int, int] = self.potential_moves[action]
         for index_to_delete in cards_to_discard:
             self.current_hand[index_to_delete] = None
 
-        hand_after_discard: list = [
+        hand_after_discard: list[tuple] = [
             card for card in self.current_hand if card is not None
         ]
 
@@ -106,61 +135,105 @@ class CribbageEnv(gym.Env):
         )
         return self.dealt_hand, hand_after_discard, reward
 
-    def step(self, action) -> tuple:
-        logging.debug(f"{action=}")
-        logging.debug(f"{self.starter_card=}")
-        logging.debug(f"{self.current_hand=}")
+    def discard_cards(self, action: np.integer):
 
-        action = action if isinstance(action, np.int64) else action[0]
-
-        crib_cards: list[tuple[int, str]] = self.opponent_crib
+        discarded_cards: list[tuple[int, str]] = []
 
         cards_to_discard: tuple[int, int] = self.potential_moves[action]
         logging.debug(f"{cards_to_discard=}")
         for index_to_delete in cards_to_discard:
-            crib_cards.append(self.current_hand[index_to_delete])
+            discarded_cards.append(self.current_hand[index_to_delete])
             self.current_hand[index_to_delete] = None
 
         hand_after_discard: list = [
             card for card in self.current_hand if card is not None
         ]
 
+        return hand_after_discard, discarded_cards
+
+    def step(self, action: Union[np.integer, np.ndarray]) -> tuple:
+        # self.start_round()
+
+        logging.debug(f"{action=}")
+        logging.debug(f"{self.starter_card=}")
+        logging.debug(f"{self.current_hand=}")
+
+        cut_scores, cut_msg = cribbage_scorer.cut_calc_score(
+            self.starter_card,
+            [AGENT_PLAYER, OPPONENT_PLAYER],
+            AGENT_PLAYER if self.is_dealer else OPPONENT_PLAYER,
+        )
+        logging.debug(f"{cut_msg=}")
+        logging.debug(f"{cut_scores=}")
+        self.player_score += cut_scores[AGENT_PLAYER]
+        self.opponent_score += cut_scores[OPPONENT_PLAYER]
+
+        action = action if isinstance(action, np.integer) else action[0]
+        hand_after_discard, discarded_cards = self.discard_cards(action)
+
         logging.debug(f"{hand_after_discard=}")
-        reward, msg = cribbage_scorer.show_calc_score(
+        points_from_hand, msg = cribbage_scorer.show_calc_score(
             self.starter_card,
             hand_after_discard,
             crib=False,
         )
+        logging.info(f"{msg=}")
+        self.player_score += points_from_hand
 
-        hand_reward = reward
+        self.opponent_crib = random.sample(
+            self.opponent_hand, CARDS_TO_DISCARD
+        )
+        remaining_opponent_hand = set(self.opponent_hand) - set(
+            self.opponent_crib
+        )
+        opponent_hand_points, opponent_message = (
+            cribbage_scorer.show_calc_score(
+                self.starter_card,
+                list(remaining_opponent_hand),
+                crib=False,
+            )
+        )
+        logging.debug(
+            f"{opponent_hand_points=} {remaining_opponent_hand=} "
+            f"{opponent_message=}"
+        )
+        # TODO: Temporary workaround.
+        # self.opponent_score += opponent_hand_points
 
-        crib_reward, crib_msg = cribbage_scorer.show_calc_score(
+        crib_cards: list[tuple[int, str]] = (
+            self.opponent_crib + discarded_cards
+        )
+        points_from_crib, crib_msg = cribbage_scorer.show_calc_score(
             self.starter_card,
             crib_cards,
             crib=True,
         )
 
-        if self.is_dealer:
-            reward += crib_reward
-        else:
-            reward -= crib_reward
+        terminated: bool = False
 
+        info: dict = {}
+        if not self.is_dealer:
+            self.opponent_score += points_from_crib
+        else:
+            self.player_score += points_from_crib
+
+        if self.opponent_score >= TARGET_SCORE:
+            info[AGENT_VICTORY] = False
+            terminated = True
+        elif self.player_score >= TARGET_SCORE:
+            info[AGENT_VICTORY] = True
+            terminated = True
+
+        reward: int = self.player_score - self.opponent_score
         logging.debug(
-            f"{self.is_dealer=} {hand_reward=} {msg=} {crib_reward=} "
-            f"{crib_msg=} {reward=}"
+            f"{self.is_dealer=} {points_from_hand=} {points_from_crib=}"
+            f" {crib_msg=} {reward=}"
         )
 
-        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(self.current_hand)
-
-        observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
-            **encoded_hand,
-            "is_dealer": np.array([self.is_dealer]),
-        }
-
-        terminated: bool = True
-        info: dict = {}
-
-        return observation, reward, terminated, False, info
+        info[CRIBBAGE_POINTS] = self.player_score
+        # TODO: Temporal workaround
+        terminated = True
+        return self.encode_observation(), reward, terminated, False, info
 
 
 def encode_hand(current_hand) -> dict[str, Optional[np.ndarray]]:
@@ -183,41 +256,47 @@ def encode_card(card: Optional[tuple[int, str]]) -> Optional[np.ndarray]:
     return np.array([value, suit])
 
 
-def run(model='random', run_steps: int = 5) -> list[int]:
+def run(
+    model: Union[str, BaseAlgorithm] = "random", run_steps: int = 5
+) -> list[int]:
 
-    assert model in ['random', 'greedy'] or isinstance(model, PPO)
+    assert model in ["random", "greedy"] or isinstance(model, PPO)
 
     current_environment = CribbageEnv()
     observation, info = current_environment.reset()
 
-    rewards: list[int] = []
+    cribbage_points: list[int] = []
 
     for _ in range(run_steps):
-        if model == 'random':
+        if model == "random":
             # Random action
             action = current_environment.action_space.sample()
-        elif model == 'greedy':
+        elif model == "greedy":
             current_environment.reset()
-            _, _, reward = current_environment.get_greedy_hand()
-        else:
-            action, _state = model.predict(observation, deterministic=True)
+            _, _, points = current_environment.get_greedy_hand()
+            cribbage_points.append(points)
+        elif isinstance(model, BaseAlgorithm):
+            action, _ = model.predict(observation, deterministic=True)
 
-        if model != 'greedy':
-            observation, reward, terminated, truncated, info = current_environment.step(
-                action
+        if model != "greedy":
+            observation, reward, terminated, truncated, info = (
+                current_environment.step(action)
             )
+
+            cribbage_points.append(info[CRIBBAGE_POINTS])
         else:
+            # CGC: Why are you setting these to False? Resetting triggers
+            # shuffling .
             terminated = False
             truncated = False
             info = {}
 
-        rewards.append(reward)
         # current_environment.render()
 
         if terminated or truncated:
             observation, info = current_environment.reset()
 
-    return rewards
+    return cribbage_points
 
 
 def get_deck() -> list[tuple[int, str]]:
@@ -239,7 +318,9 @@ def train(total_timesteps=10_000):
         batch_size=2048,
         learning_rate=1e-4,
         tensorboard_log="cribbage_tensorboard_log",
-        policy_kwargs={"net_arch": [{"pi": [128, 128, 128], "vf": [128, 128, 128]}]},
+        policy_kwargs={
+            "net_arch": [{"pi": [128, 128, 128], "vf": [128, 128, 128]}]
+        },
     )
 
     model.learn(
@@ -248,7 +329,8 @@ def train(total_timesteps=10_000):
     )
 
     model.save(
-        f"saved_models/random_cards_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        "saved_models/"
+        f"random_cards_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     )
 
     return model
@@ -264,11 +346,12 @@ def model_close_look(model):
         model,
     )
 
+
 if __name__ == "__main__":
     print("Getting reference scores...")
 
-    run_steps: int = 100
-    total_timesteps: int = 100
+    run_steps: int = 1000
+    total_timesteps: int = 100_000
 
     start = time.time()
     model = train(total_timesteps)
@@ -277,9 +360,8 @@ if __name__ == "__main__":
     # model_close_look(model)
 
     model_rewards: list[int] = run(model, run_steps=run_steps)
-    random_rewards: list[int] = run(model='random', run_steps=run_steps)
-    greedy_rewards: list[int] = run(model='greedy', run_steps=run_steps)
-
+    random_rewards: list[int] = run(model="random", run_steps=run_steps)
+    greedy_rewards: list[int] = run(model="greedy", run_steps=run_steps)
 
     print(f"{np.mean(model_rewards)=}")
     print(f"{np.mean(random_rewards)=}")
@@ -287,9 +369,9 @@ if __name__ == "__main__":
 
     data: pd.DataFrame = pd.DataFrame(
         {
-            "approach": ["random" for _ in range(len(random_rewards))] + 
-                        ["greedy" for _ in range(len(greedy_rewards))] +
-                        ["model" for _ in range(len(model_rewards))],
+            "approach": ["random" for _ in range(len(random_rewards))]
+            + ["greedy" for _ in range(len(greedy_rewards))]
+            + ["model" for _ in range(len(model_rewards))],
             "score": random_rewards + greedy_rewards + model_rewards,
         }
     )
