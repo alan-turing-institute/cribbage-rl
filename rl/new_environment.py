@@ -1,22 +1,18 @@
 import logging
 import random
+import time
 from datetime import datetime
 from itertools import combinations
-from typing import Optional, Union
-import time
+from typing import Final, Optional, Union
+
 import gymnasium as gym
 import matplotlib.pyplot as plt
 import numpy as np
-from itertools import combinations
-import random
-from cribbage_scorer import cribbage_scorer
-from typing import Optional, Final
-from stable_baselines3 import A2C
 import pandas as pd
 import seaborn as sns
 from cribbage_scorer import cribbage_scorer
 from gymnasium import spaces
-from stable_baselines3 import PPO
+from stable_baselines3 import A2C, PPO
 
 CARDS_IN_HAND: Final[int] = 6
 CARDS_TO_DISCARD: Final[int] = 2
@@ -43,6 +39,8 @@ class CribbageEnv(gym.Env):
                 },
             }
         )
+
+        self.reward_range = (-30, 60)
 
         card_indexes: list[int] = list(range(CARDS_IN_HAND))
         self.potential_moves: list = list(combinations(card_indexes, CARDS_TO_DISCARD))
@@ -95,17 +93,17 @@ class CribbageEnv(gym.Env):
     def discard(self, action):
         cards_to_discard: tuple[int, int] = self.potential_moves[action]
         for index_to_delete in cards_to_discard:
-                self.current_hand[index_to_delete] = None
+            self.current_hand[index_to_delete] = None
 
         hand_after_discard: list = [
-                    card for card in self.current_hand if card is not None
-                ]
+            card for card in self.current_hand if card is not None
+        ]
 
         reward, msg = cribbage_scorer.show_calc_score(
-                    self.starter_card,
-                    hand_after_discard,
-                    crib=False,
-                )
+        self.starter_card,
+            hand_after_discard,
+            crib=False,
+        )
         return self.dealt_hand, hand_after_discard, reward
 
     def step(self, action) -> tuple:
@@ -218,17 +216,22 @@ def get_deck() -> list[tuple[int, str]]:
     return deck
 
 
-def train(total_timesteps=10_000, model_args={}):
+def train(total_timesteps=10_000):
     current_environment = CribbageEnv()
     model = PPO(
         "MultiInputPolicy",
         current_environment,
         verbose=1,
-        batch_size=512,
+        n_steps=2048,
+        batch_size=2048,
+        learning_rate=1e-4,
         tensorboard_log="cribbage_tensorboard_log",
-        **model_args)
+        policy_kwargs={"net_arch": [{"pi": [128, 128, 128], "vf": [128, 128, 128]}]},
+    )
+
     model.learn(
-        total_timesteps=total_timesteps, progress_bar=True,
+        total_timesteps=total_timesteps,
+        progress_bar=True,
     )
 
     model.save(
@@ -248,6 +251,7 @@ def model_close_look(model):
         model,
     )
 
+
 def get_greedy_action(environment):
 
     # Score all possible combinations of cards
@@ -258,10 +262,10 @@ if __name__ == "__main__":
     print("Getting reference scores...")
 
     run_steps: int = 1000
-    total_timesteps: int = 10_000
+    total_timesteps: int = 1_000_000
 
     start = time.time()
-    model = train(total_timesteps, model_args={"device":None})
+    model = train(total_timesteps)
     print("Training time:", time.time() - start)
 
     # model_close_look(model)
