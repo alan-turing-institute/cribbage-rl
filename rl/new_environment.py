@@ -183,21 +183,34 @@ def encode_card(card: Optional[tuple[int, str]]) -> Optional[np.ndarray]:
     return np.array([value, suit])
 
 
-def run(model=None, run_steps: int = 5) -> list[int]:
+def run(model='random', run_steps: int = 5) -> list[int]:
+
+    assert model in ['random', 'greedy'] or isinstance(model, PPO)
+
     current_environment = CribbageEnv()
     observation, info = current_environment.reset()
 
     rewards: list[int] = []
 
     for _ in range(run_steps):
-        if model is None:
+        if model == 'random':
+            # Random action
             action = current_environment.action_space.sample()
+        elif model == 'greedy':
+            current_environment.reset()
+            _, _, reward = current_environment.get_greedy_hand()
         else:
             action, _state = model.predict(observation, deterministic=True)
 
-        observation, reward, terminated, truncated, info = current_environment.step(
-            action
-        )
+        if model != 'greedy':
+            observation, reward, terminated, truncated, info = current_environment.step(
+                action
+            )
+        else:
+            terminated = False
+            truncated = False
+            info = {}
+
         rewards.append(reward)
         # current_environment.render()
 
@@ -251,18 +264,11 @@ def model_close_look(model):
         model,
     )
 
-
-def get_greedy_action(environment):
-
-    # Score all possible combinations of cards
-    potential_scores = []
-
-
 if __name__ == "__main__":
     print("Getting reference scores...")
 
-    run_steps: int = 1000
-    total_timesteps: int = 1_000_000
+    run_steps: int = 100
+    total_timesteps: int = 100
 
     start = time.time()
     model = train(total_timesteps)
@@ -271,16 +277,20 @@ if __name__ == "__main__":
     # model_close_look(model)
 
     model_rewards: list[int] = run(model, run_steps=run_steps)
-    random_rewards: list[int] = run(run_steps=run_steps)
+    random_rewards: list[int] = run(model='random', run_steps=run_steps)
+    greedy_rewards: list[int] = run(model='greedy', run_steps=run_steps)
+
 
     print(f"{np.mean(model_rewards)=}")
     print(f"{np.mean(random_rewards)=}")
+    print(f"{np.mean(greedy_rewards)=}")
 
     data: pd.DataFrame = pd.DataFrame(
         {
-            "approach": ["random" for _ in range(len(random_rewards))]
-            + ["model" for _ in range(len(model_rewards))],
-            "score": random_rewards + model_rewards,
+            "approach": ["random" for _ in range(len(random_rewards))] + 
+                        ["greedy" for _ in range(len(greedy_rewards))] +
+                        ["model" for _ in range(len(model_rewards))],
+            "score": random_rewards + greedy_rewards + model_rewards,
         }
     )
 
