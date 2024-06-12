@@ -1,19 +1,20 @@
+import time
 import gymnasium as gym
 from gymnasium import spaces
 import numpy as np
 from itertools import combinations
 import random
 from cribbage_scorer import cribbage_scorer
-from typing import Optional
+from typing import Optional, Final
 from stable_baselines3 import A2C
 import pandas as pd
 import logging
 import seaborn as sns
 import matplotlib.pyplot as plt
 
-CARDS_IN_HAND: int = 6
-CARDS_TO_DISCARD: int = 2
-ALL_SUITS: list[str] = ["D", "S", "C", "H"]
+CARDS_IN_HAND: Final[int] = 6
+CARDS_TO_DISCARD: Final[int] = 2
+ALL_SUITS: Final[list[str]] = ["D", "S", "C", "H"]
 
 SUIT_TO_NUMBER: dict[str, int] = {
     suit: index for index, suit in enumerate(ALL_SUITS)
@@ -65,6 +66,26 @@ class CribbageEnv(gym.Env):
 
     def render(self):
         return f"Hand: {self.current_hand} Starter: {self.starter_card}"
+
+    def get_greedy_action(self):
+        pass
+
+    def discard(self, action):
+        cards_to_discard: tuple[int, int] = self.potential_moves[action]
+        original_hand = self.current_hand.copy()
+        for index_to_delete in cards_to_discard:
+                self.current_hand[index_to_delete] = None
+
+        hand_after_discard: list = [
+                    card for card in self.current_hand if card is not None
+                ]
+
+        reward, msg = cribbage_scorer.show_calc_score(
+                    self.starter_card,
+                    hand_after_discard,
+                    crib=False,
+                )
+        return original_hand, hand_after_discard, reward
 
     def step(self, action) -> tuple:
         logging.debug(f"{action=}")
@@ -152,10 +173,10 @@ def get_deck() -> list[tuple[int, str]]:
     return deck
 
 
-def train(total_timesteps=10_000):
+def train(total_timesteps=10_000, model_args={}):
     current_environment = CribbageEnv()
-    model = A2C("MultiInputPolicy", current_environment, verbose=1)
-    model.learn(total_timesteps=total_timesteps)
+    model = A2C("MultiInputPolicy", current_environment, verbose=1, **model_args)
+    model.learn(total_timesteps=total_timesteps, progress_bar=True)
 
     return model
 
@@ -170,14 +191,21 @@ def model_close_look(model):
         model,
     )
 
+def get_greedy_action(environment):
+
+    # Score all possible combinations of cards
+    potential_scores = []
+
 
 if __name__ == "__main__":
     print("Getting reference scores...")
 
-    run_steps: int = 1000
-    total_timesteps: int = 100_000
+    run_steps: int = 1_000
+    total_timesteps: int = 10_000
 
-    model = train(total_timesteps)
+    start = time.time()
+    model = train(total_timesteps, model_args={"device":None})
+    print("Training time:", time.time() - start)
 
     # model_close_look(model)
 
