@@ -16,6 +16,11 @@ CARDS_IN_HAND: int = 6
 CARDS_TO_DISCARD: int = 2
 ALL_SUITS: list[str] = ["D", "S", "C", "H"]
 CRIBBAGE_POINTS: str = "cribbage_points"
+AGENT_PLAYER: str = "agent"
+OPPONENT_PLAYER: str = "opponent"
+
+TARGET_SCORE: int = 131
+AGENT_VICTORY: str = "agent_victory"
 
 SUIT_TO_NUMBER: dict[str, int] = {
     suit: index for index, suit in enumerate(ALL_SUITS)
@@ -51,6 +56,16 @@ class CribbageEnv(gym.Env):
     def reset(self, seed=None, options=None) -> tuple:
         super().reset(seed=seed)
 
+        self.is_dealer: Optional[int] = None
+        self.player_score: int = 0
+        self.opponent_score: int = 0
+
+        info: dict = {}
+        # TODO: Temporal workaround.
+        self.start_round()
+        return self.encode_observation(), info
+
+    def start_round(self) -> None:
         current_deck: list[tuple[int, str]] = get_deck()
         random.shuffle(current_deck)
 
@@ -60,23 +75,29 @@ class CribbageEnv(gym.Env):
         self.current_hand = current_deck[-CARDS_IN_HAND:]
         del current_deck[-CARDS_IN_HAND:]
 
-        self.opponent_crib = current_deck[-CARDS_TO_DISCARD:]
-        del current_deck[-CARDS_TO_DISCARD:]
+        self.opponent_hand: list[tuple[int, str]] = current_deck[
+            -CARDS_IN_HAND:
+        ]
+        del current_deck[-CARDS_IN_HAND:]
 
-        is_dealer: int = random.choice([0, 1])
-        self.is_dealer = is_dealer
+        if self.is_dealer is None:
+            self.is_dealer = random.choice([0, 1])
+        else:
+            self.is_dealer = 0 if self.is_dealer == 1 else 0
 
+    def encode_observation(
+        self,
+    ) -> dict[str, Union[bool, Optional[np.ndarray]]]:
         encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(
             self.current_hand
         )
 
         observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
             **encoded_hand,
-            "is_dealer": np.array([is_dealer]),
+            "is_dealer": np.array([self.is_dealer]),
         }
-        info: dict = {}
 
-        return observation, info
+        return observation
 
     def render(self):
         return f"Hand: {self.current_hand} Starter: {self.starter_card}"
@@ -98,18 +119,24 @@ class CribbageEnv(gym.Env):
         return hand_after_discard, discarded_cards
 
     def step(self, action) -> tuple:
+        self.start_round()
+
         logging.debug(f"{action=}")
         logging.debug(f"{self.starter_card=}")
         logging.debug(f"{self.current_hand=}")
 
-        info: dict = {}
+        cut_scores, cut_msg = cribbage_scorer.cut_calc_score(
+            self.starter_card,
+            [AGENT_PLAYER, OPPONENT_PLAYER],
+            AGENT_PLAYER if self.is_dealer else OPPONENT_PLAYER,
+        )
+        logging.debug(f"{cut_msg=}")
+        logging.debug(f"{cut_scores=}")
+        self.player_score += cut_scores[AGENT_PLAYER]
+        self.opponent_score += cut_scores[OPPONENT_PLAYER]
 
         action = action if isinstance(action, np.integer) else action[0]
         hand_after_discard, discarded_cards = self.discard_cards(action)
-
-        crib_cards: list[tuple[int, str]] = (
-            self.opponent_crib + discarded_cards
-        )
 
         logging.debug(f"{hand_after_discard=}")
         points_from_hand, msg = cribbage_scorer.show_calc_score(
@@ -117,38 +144,62 @@ class CribbageEnv(gym.Env):
             hand_after_discard,
             crib=False,
         )
+        logging.info(f"{msg=}")
+        self.player_score += points_from_hand
 
+        self.opponent_crib = random.sample(
+            self.opponent_hand, CARDS_TO_DISCARD
+        )
+        remaining_opponent_hand = set(self.opponent_hand) - set(
+            self.opponent_crib
+        )
+        opponent_hand_points, opponent_message = (
+            cribbage_scorer.show_calc_score(
+                self.starter_card,
+                list(remaining_opponent_hand),
+                crib=False,
+            )
+        )
+        logging.debug(
+            f"{opponent_hand_points=} {remaining_opponent_hand=} "
+            f"{opponent_message=}"
+        )
+        self.opponent_score += opponent_hand_points
+
+        crib_cards: list[tuple[int, str]] = (
+            self.opponent_crib + discarded_cards
+        )
         points_from_crib, crib_msg = cribbage_scorer.show_calc_score(
             self.starter_card,
             crib_cards,
             crib=True,
         )
 
-        reward: int = 0
-        if self.is_dealer:
-            info[CRIBBAGE_POINTS] = points_from_hand + points_from_crib
-            reward = points_from_hand + points_from_crib
+        terminated: bool = False
+
+        info: dict = {}
+        if not self.is_dealer:
+            self.opponent_score += points_from_crib
         else:
-            info[CRIBBAGE_POINTS] = points_from_hand
-            reward = points_from_hand - points_from_crib
+            self.player_score += points_from_crib
 
+        if self.opponent_score >= TARGET_SCORE:
+            info[AGENT_VICTORY] = False
+            terminated = True
+        elif self.player_score >= TARGET_SCORE:
+            info[AGENT_VICTORY] = True
+            terminated = True
+
+        reward: int = self.player_score - self.opponent_score
         logging.debug(
-            f"{self.is_dealer=} {points_from_hand=} {msg=} {points_from_crib=} "
-            f"{crib_msg=} {reward=}"
+            f"{self.is_dealer=} {points_from_hand=} {points_from_crib=}"
+            f" {crib_msg=} {reward=}"
         )
 
-        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(
-            self.current_hand
-        )
-
-        observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
-            **encoded_hand,
-            "is_dealer": np.array([self.is_dealer]),
-        }
-
-        terminated: bool = True
-
-        return observation, reward, terminated, False, info
+        info[CRIBBAGE_POINTS] = self.player_score
+        # TODO: Temporal workaround
+        terminated = True
+        return self.encode_observation(), reward, terminated, False, info
 
 
 def encode_hand(current_hand) -> dict[str, Optional[np.ndarray]]:
@@ -181,10 +232,10 @@ def run(model=None, run_steps: int = 5) -> list[int]:
         if model is None:
             action = current_environment.action_space.sample()
         else:
-            action, _state = model.predict(observation, deterministic=True)
+            action, _ = model.predict(observation, deterministic=True)
 
-        observation, reward, terminated, truncated, info = (
-            current_environment.step(action)
+        observation, _, terminated, truncated, info = current_environment.step(
+            action
         )
         rewards.append(info[CRIBBAGE_POINTS])
         # current_environment.render()
@@ -214,7 +265,7 @@ def train(total_timesteps=10_000):
     )
     model.learn(
         total_timesteps=total_timesteps,
-        progress_bar=True,
+        progress_bar=False,
     )
 
     return model
