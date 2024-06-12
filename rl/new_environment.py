@@ -1,5 +1,6 @@
 import logging
 import random
+from datetime import datetime
 from itertools import combinations
 from typing import Optional, Union
 
@@ -16,9 +17,7 @@ CARDS_IN_HAND: int = 6
 CARDS_TO_DISCARD: int = 2
 ALL_SUITS: list[str] = ["D", "S", "C", "H"]
 
-SUIT_TO_NUMBER: dict[str, int] = {
-    suit: index for index, suit in enumerate(ALL_SUITS)
-}
+SUIT_TO_NUMBER: dict[str, int] = {suit: index for index, suit in enumerate(ALL_SUITS)}
 
 
 class CribbageEnv(gym.Env):
@@ -41,9 +40,7 @@ class CribbageEnv(gym.Env):
         )
 
         card_indexes: list[int] = list(range(CARDS_IN_HAND))
-        self.potential_moves: list = list(
-            combinations(card_indexes, CARDS_TO_DISCARD)
-        )
+        self.potential_moves: list = list(combinations(card_indexes, CARDS_TO_DISCARD))
 
         self.action_space = spaces.Discrete(len(self.potential_moves))
 
@@ -65,9 +62,7 @@ class CribbageEnv(gym.Env):
         is_dealer: int = random.choice([0, 1])
         self.is_dealer = is_dealer
 
-        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(
-            self.current_hand
-        )
+        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(self.current_hand)
 
         observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
             **encoded_hand,
@@ -124,9 +119,7 @@ class CribbageEnv(gym.Env):
             f"{crib_msg=} {reward=}"
         )
 
-        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(
-            self.current_hand
-        )
+        encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(self.current_hand)
 
         observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
             **encoded_hand,
@@ -171,8 +164,8 @@ def run(model=None, run_steps: int = 5) -> list[int]:
         else:
             action, _state = model.predict(observation, deterministic=True)
 
-        observation, reward, terminated, truncated, info = (
-            current_environment.step(action)
+        observation, reward, terminated, truncated, info = current_environment.step(
+            action
         )
         rewards.append(reward)
         # current_environment.render()
@@ -198,11 +191,16 @@ def train(total_timesteps=10_000):
         "MultiInputPolicy",
         current_environment,
         verbose=1,
+        batch_size=512,
         tensorboard_log="cribbage_tensorboard_log",
     )
     model.learn(
         total_timesteps=total_timesteps,
         progress_bar=True,
+    )
+
+    model.save(
+        f"saved_models/random_cards_model_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     )
 
     return model
@@ -223,7 +221,7 @@ if __name__ == "__main__":
     print("Getting reference scores...")
 
     run_steps: int = 1000
-    total_timesteps: int = 1_000_000
+    total_timesteps: int = 10_000
 
     model = train(total_timesteps)
 
