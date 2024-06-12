@@ -55,6 +55,9 @@ class CribbageEnv(gym.Env):
         self.current_hand = current_deck[-CARDS_IN_HAND:]
         del current_deck[-CARDS_IN_HAND:]
 
+        self.opponent_crib = current_deck[-CARDS_TO_DISCARD:]
+        del current_deck[-CARDS_TO_DISCARD:]
+
         is_dealer: int = random.choice([0, 1])
         self.is_dealer = is_dealer
 
@@ -78,9 +81,12 @@ class CribbageEnv(gym.Env):
 
         action = action if isinstance(action, np.int64) else action[0]
 
+        crib_cards: list[tuple[int, str]] = self.opponent_crib
+
         cards_to_discard: tuple[int, int] = self.potential_moves[action]
         logging.debug(f"{cards_to_discard=}")
         for index_to_delete in cards_to_discard:
+            crib_cards.append(self.current_hand[index_to_delete])
             self.current_hand[index_to_delete] = None
 
         hand_after_discard: list = [
@@ -93,6 +99,17 @@ class CribbageEnv(gym.Env):
             hand_after_discard,
             crib=False,
         )
+
+        crib_reward, crib_msg = cribbage_scorer.show_calc_score(
+            self.starter_card,
+            crib_cards,
+            crib=True,
+        )
+
+        if self.is_dealer:
+            reward += crib_reward
+        else:
+            reward -= crib_reward
 
         logging.debug(f"{reward=} {msg=}")
 
@@ -185,7 +202,7 @@ if __name__ == "__main__":
     print("Getting reference scores...")
 
     run_steps: int = 1000
-    total_timesteps: int = 1_000
+    total_timesteps: int = 100_000
 
     model = train(total_timesteps)
 
