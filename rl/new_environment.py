@@ -119,7 +119,7 @@ class CribbageEnv(gym.Env):
         return hand_after_discard, discarded_cards
 
     def step(self, action) -> tuple:
-        self.start_round()
+        # self.start_round()
 
         logging.debug(f"{action=}")
         logging.debug(f"{self.starter_card=}")
@@ -164,7 +164,8 @@ class CribbageEnv(gym.Env):
             f"{opponent_hand_points=} {remaining_opponent_hand=} "
             f"{opponent_message=}"
         )
-        self.opponent_score += opponent_hand_points
+        # TODO: Temporary workaround.
+        # self.opponent_score += opponent_hand_points
 
         crib_cards: list[tuple[int, str]] = (
             self.opponent_crib + discarded_cards
