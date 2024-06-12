@@ -40,6 +40,8 @@ class CribbageEnv(gym.Env):
             }
         )
 
+        self.reward_range = (-30, 60)
+
         card_indexes: list[int] = list(range(CARDS_IN_HAND))
         self.potential_moves: list = list(combinations(card_indexes, CARDS_TO_DISCARD))
 
@@ -212,6 +214,7 @@ def train(total_timesteps=10_000):
         "MultiInputPolicy",
         current_environment,
         verbose=1,
+        n_steps=2048,
         batch_size=2048,
         learning_rate=1e-4,
         tensorboard_log="cribbage_tensorboard_log",
