@@ -15,6 +15,7 @@ from stable_baselines3 import PPO
 CARDS_IN_HAND: int = 6
 CARDS_TO_DISCARD: int = 2
 ALL_SUITS: list[str] = ["D", "S", "C", "H"]
+CRIBBAGE_POINTS: str = "cribbage_points"
 
 SUIT_TO_NUMBER: dict[str, int] = {
     suit: index for index, suit in enumerate(ALL_SUITS)
@@ -80,47 +81,59 @@ class CribbageEnv(gym.Env):
     def render(self):
         return f"Hand: {self.current_hand} Starter: {self.starter_card}"
 
-    def step(self, action) -> tuple:
-        logging.debug(f"{action=}")
-        logging.debug(f"{self.starter_card=}")
-        logging.debug(f"{self.current_hand=}")
+    def discard_cards(self, action: int):
 
-        action = action if isinstance(action, np.int64) else action[0]
-
-        crib_cards: list[tuple[int, str]] = self.opponent_crib
+        discarded_cards: list[tuple[int, str]] = []
 
         cards_to_discard: tuple[int, int] = self.potential_moves[action]
         logging.debug(f"{cards_to_discard=}")
         for index_to_delete in cards_to_discard:
-            crib_cards.append(self.current_hand[index_to_delete])
+            discarded_cards.append(self.current_hand[index_to_delete])
             self.current_hand[index_to_delete] = None
 
         hand_after_discard: list = [
             card for card in self.current_hand if card is not None
         ]
 
+        return hand_after_discard, discarded_cards
+
+    def step(self, action) -> tuple:
+        logging.debug(f"{action=}")
+        logging.debug(f"{self.starter_card=}")
+        logging.debug(f"{self.current_hand=}")
+
+        info: dict = {}
+
+        action = action if isinstance(action, np.integer) else action[0]
+        hand_after_discard, discarded_cards = self.discard_cards(action)
+
+        crib_cards: list[tuple[int, str]] = (
+            self.opponent_crib + discarded_cards
+        )
+
         logging.debug(f"{hand_after_discard=}")
-        reward, msg = cribbage_scorer.show_calc_score(
+        points_from_hand, msg = cribbage_scorer.show_calc_score(
             self.starter_card,
             hand_after_discard,
             crib=False,
         )
 
-        hand_reward = reward
-
-        crib_reward, crib_msg = cribbage_scorer.show_calc_score(
+        points_from_crib, crib_msg = cribbage_scorer.show_calc_score(
             self.starter_card,
             crib_cards,
             crib=True,
         )
 
+        reward: int = 0
         if self.is_dealer:
-            reward += crib_reward
+            info[CRIBBAGE_POINTS] = points_from_hand + points_from_crib
+            reward = points_from_hand + points_from_crib
         else:
-            reward -= crib_reward
+            info[CRIBBAGE_POINTS] = points_from_hand
+            reward = points_from_hand - points_from_crib
 
         logging.debug(
-            f"{self.is_dealer=} {hand_reward=} {msg=} {crib_reward=} "
+            f"{self.is_dealer=} {points_from_hand=} {msg=} {points_from_crib=} "
             f"{crib_msg=} {reward=}"
         )
 
@@ -134,7 +147,6 @@ class CribbageEnv(gym.Env):
         }
 
         terminated: bool = True
-        info: dict = {}
 
         return observation, reward, terminated, False, info
 
@@ -174,7 +186,7 @@ def run(model=None, run_steps: int = 5) -> list[int]:
         observation, reward, terminated, truncated, info = (
             current_environment.step(action)
         )
-        rewards.append(reward)
+        rewards.append(info[CRIBBAGE_POINTS])
         # current_environment.render()
 
         if terminated or truncated:
@@ -223,7 +235,7 @@ if __name__ == "__main__":
     print("Getting reference scores...")
 
     run_steps: int = 1000
-    total_timesteps: int = 1_000_000
+    total_timesteps: int = 100_000
 
     model = train(total_timesteps)
 

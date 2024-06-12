@@ -7,3 +7,4 @@ seaborn
 tensorboard
 tqdm
 rich
+torch-tb-profiler
