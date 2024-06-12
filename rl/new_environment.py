@@ -10,7 +10,7 @@ import pandas as pd
 import seaborn as sns
 from cribbage_scorer import cribbage_scorer
 from gymnasium import spaces
-from stable_baselines3 import A2C
+from stable_baselines3 import A2C, PPO
 
 CARDS_IN_HAND: int = 6
 CARDS_TO_DISCARD: int = 2
@@ -75,6 +75,8 @@ class CribbageEnv(gym.Env):
         logging.debug(f"{action=}")
         logging.debug(f"{self.starter_card=}")
         logging.debug(f"{self.current_hand=}")
+
+        action = action if isinstance(action, np.int64) else action[0]
 
         cards_to_discard: tuple[int, int] = self.potential_moves[action]
         logging.debug(f"{cards_to_discard=}")
@@ -162,7 +164,7 @@ def get_deck() -> list[tuple[int, str]]:
 
 def train(total_timesteps=10_000):
     current_environment = CribbageEnv()
-    model = A2C("MultiInputPolicy", current_environment, verbose=1)
+    model = PPO("MultiInputPolicy", current_environment, verbose=1)
     model.learn(total_timesteps=total_timesteps)
 
     return model
@@ -183,7 +185,7 @@ if __name__ == "__main__":
     print("Getting reference scores...")
 
     run_steps: int = 1000
-    total_timesteps: int = 100_000
+    total_timesteps: int = 1_000
 
     model = train(total_timesteps)
 
