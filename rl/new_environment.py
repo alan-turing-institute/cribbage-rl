@@ -50,8 +50,9 @@ class CribbageEnv(gym.Env):
                 },
             }
         )
+        self.observation_space["game_score_different"] = spaces.Discrete(242, start=-TARGET_SCORE)
 
-        self.reward_range = (-30, 60)
+        # self.reward_range = (-30, 60)
 
         card_indexes: list[int] = list(range(CARDS_IN_HAND))
         self.potential_moves: list = list(
@@ -97,16 +98,19 @@ class CribbageEnv(gym.Env):
 
     def encode_observation(
         self,
-    ) -> dict[str, Union[bool, Optional[np.ndarray]]]:
+    ) -> dict[str, Union[bool, Optional[np.ndarray], float]]:
         encoded_hand: dict[str, Optional[np.ndarray]] = encode_hand(
             self.current_hand
         )
 
-        observation: dict[str, Union[bool, Optional[np.ndarray]]] = {
+        observation: dict[str, Union[bool, Optional[np.ndarray], float]] = {
             **encoded_hand,
             "is_dealer": np.array([self.is_dealer]),
         }
 
+        observation["game_score_different"] = (
+            TARGET_SCORE + self.player_score - self.opponent_score
+        )
         return observation
 
     def render(self):
@@ -391,7 +395,7 @@ if __name__ == "__main__":
 
     evaluation_steps: int = 100_000
     # total_timesteps: int = 100_000
-    training_steps: int = 1_000_000
+    training_steps: int = 1_000
 
     start = time.time()
     model = train(training_steps)
