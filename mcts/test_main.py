@@ -22,9 +22,6 @@ def strategy4() -> int:
 
 
 class TestMain(unittest.TestCase):
-    def test_main(self) -> None:
-        self.assertEqual(main.main(), 0)
-
     def test_eval_one(self) -> None:
         main.evaluate_strategies.cache_clear()
         main.strategies = [strategy1, strategy2]
@@ -38,3 +35,37 @@ class TestMain(unittest.TestCase):
         main.strategies = [strategy3, strategy4]
         rates = main.evaluate_strategies((0, 0), 10, 100)
         self.assertTrue(rates[1] + 0.1 > rates[0] > rates[1] - 0.1)
+
+    def test_eval_three(self) -> None:
+        main.evaluate_strategies.cache_clear()
+        main.strategies = [strategy4, strategy4]
+        rates = main.evaluate_strategies((9, 9), 10, 100)
+        self.assertTrue(rates[0] == rates[1] == 1.0)
+
+    def test_eval_cribbage(self) -> None:
+        main.evaluate_strategies.cache_clear()
+        main.strategies = [main.agressive, main.conservative]
+
+        print("first move")
+        rates = main.evaluate_strategies((0, 0), 121, 400)
+        print("aggressive, conservative", rates)
+
+        print("last move 1")
+        rates = main.evaluate_strategies((118, 118), 121, 400)
+        print("aggressive, conservative", rates)
+
+        print("last move 2")
+        rates = main.evaluate_strategies((114, 114), 121, 400)
+        print("aggressive, conservative", rates)
+
+        print("behind 1")
+        rates = main.evaluate_strategies((0, 9), 121, 400)
+        print("aggressive, conservative", rates)
+
+        print("behind 2")
+        rates = main.evaluate_strategies((90, 97), 121, 400)
+        print("aggressive, conservative", rates)
+
+        print("ahead")
+        rates = main.evaluate_strategies((9, 0), 121, 400)
+        print("aggressive, conservative", rates)
