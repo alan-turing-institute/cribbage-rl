@@ -218,12 +218,22 @@ class CribbageEnv(gym.Env):
             self.player_score += points_from_crib
 
         terminated: bool = False
-        if self.opponent_score >= TARGET_SCORE:
-            info[AGENT_VICTORY] = False
-            terminated = True
-        elif self.player_score > TARGET_SCORE:
-            info[AGENT_VICTORY] = True
-            terminated = True
+
+        # If agent isn't dealer, count agent's first.
+        if not self.is_dealer:
+            if self.player_score > TARGET_SCORE:
+                info[AGENT_VICTORY] = True
+                terminated = True
+            elif self.opponent_score > TARGET_SCORE:
+                info[AGENT_VICTORY] = False
+                terminated = True
+        else:
+            if self.opponent_score > TARGET_SCORE:
+                info[AGENT_VICTORY] = False
+                terminated = True
+            elif self.player_score > TARGET_SCORE:
+                info[AGENT_VICTORY] = True
+                terminated = True
 
         reward: int = self.player_score - self.opponent_score
         logging.debug(
@@ -261,6 +271,7 @@ def encode_card(card: Optional[tuple[int, str]]) -> Optional[np.ndarray]:
 def run(
     model: Union[str, BaseAlgorithm] = "random", run_steps: int = 5
 ) -> tuple[list[int], float]:
+    print(f"Evaluating {model} for {run_steps} steps")
 
     assert model in ["random", "greedy"] or isinstance(model, PPO)
 
@@ -302,7 +313,8 @@ def run(
             observation, info = current_environment.reset()
 
     win_rate = sum(agent_wins) / len(agent_wins)
-    print(f"{sum(agent_wins)=}")
+    print(f"{model} {sum(agent_wins)=}")
+    print(f"{model} {len(agent_wins)=}")
 
     return cribbage_points, win_rate
 
@@ -360,7 +372,7 @@ def model_close_look(model):
 if __name__ == "__main__":
     print("Getting reference scores...")
 
-    run_steps: int = 10000
+    run_steps: int = 1_000
     # total_timesteps: int = 100_000
     total_timesteps: int = 100_000
 
