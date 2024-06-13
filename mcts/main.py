@@ -1,5 +1,6 @@
 from functools import cache
 import random
+from pathlib import Path
 from typing import Iterable, Callable, Optional
 import numpy as np
 import numpy.typing as npt
@@ -11,12 +12,12 @@ strategies: Optional[Iterable[Callable[[], int]]] = None
 
 
 def conservative() -> int:
-    scores = 3, 4, 5
+    scores = 8,
     return random.choices(scores, weights=[1 for _ in scores])[0]
 
 
 def agressive() -> int:
-    scores = 1, 2, 3, 4, 5, 6, 7
+    scores = 5, 11
     return random.choices(scores, weights=[1 for _ in scores])[0]
 
 
@@ -48,19 +49,45 @@ def evaluate_strategies(
 def main() -> None:
     """Evaluate the best strategy for each possible state."""
     global strategies
-    max_score = 120
-    data: npt.NDArray[np.int_] = np.ndarray(shape=(max_score, max_score), dtype=int)
-    strategies = [agressive, conservative]
-    for x in range(max_score):
-        for y in range(max_score):
-            data[x, y] = np.argmax(evaluate_strategies((x, y), 121, 100))
+    max_score = 121
+    iterations = 100
+
+    filename = f"./cribbage_{max_score}_{iterations}.npy"
+    if Path(filename).exists():
+        print("loading")
+        data = np.load(filename)
+    else:
+        data: npt.NDArray[np.int_] = np.ndarray(shape=(max_score-1, max_score-1, 3), dtype=np.float32)
+        strategies = [agressive, conservative]
+        for x in range(max_score-1):
+            for y in range(max_score-1):
+                prob_agg, prob_cons = evaluate_strategies((x, y), 121, 100)
+                # data[x, y] = 0 if prob_agg > prob_cons else 1
+                data[x, y] = prob_agg, prob_cons, 0  # RGB
+                # contour_data[x, y] =  0.5 + (0.5 * (prob_agg - prob_cons)) / (prob_agg + prob_cons + 1e-12)
+                # contour_data[x, y] = 0.5 + (0.5 * (prob_agg - prob_cons)) / (prob_agg + prob_cons + 1e-6)
+                # colour_data[x, y] = prob_agg, 0, prob_cons
+
+        np.save("./cribbage_121_100.npy", data)
+
+
+    # contour_data: npt.NDArray[np.float_] = np.ndarray(shape=(max_score - 1, max_score - 1), dtype=np.float32)
+    # colour_data: npt.NDArray[np.float_] = np.ndarray(shape=(max_score - 1, max_score - 1, 3), dtype=np.float32)
+    # exit(0)
+    # print(contour_data[10:20, 50])
     plt.imshow(
         data,
-        cmap="hot",
+        # cmap="hot",
         interpolation="nearest",
         origin="lower",
     )
-    plt.savefig("./cribbage.png")
+    # plt.contourf(
+    #     contour_data,
+    #     cmap="RdYlBu",
+    #     levels=30,
+    #     origin="lower",
+    # )
+    plt.savefig("./cribbage_1.png")
 
 
 if __name__ == "__main__":
