@@ -88,7 +88,10 @@ class CribbageEnv(gym.Env):
         if self.is_dealer is None:
             self.is_dealer = random.choice([0, 1])
         else:
-            self.is_dealer = 0 if self.is_dealer == 1 else 0
+            if self.is_dealer == 0:
+                self.is_dealer = 1
+            else:
+                self.is_dealer = 0
 
     def encode_observation(
         self,
