@@ -35,7 +35,7 @@ SUIT_TO_NUMBER: dict[str, int] = {
 class CribbageEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, render_mode=None, size=5) -> None:
+    def __init__(self, render_mode=None, size=5, opponent_type='random') -> None:
 
         self.observation_space = spaces.Dict(
             {
@@ -51,6 +51,9 @@ class CribbageEnv(gym.Env):
             }
         )
         self.observation_space["game_score_different"] = spaces.Discrete(242, start=-TARGET_SCORE)
+
+        self.opponent_type = opponent_type
+        assert self.opponent_type in ["random", "greedy"]
 
         # self.reward_range = (-30, 60)
 
@@ -116,32 +119,53 @@ class CribbageEnv(gym.Env):
     def render(self):
         return f"Hand: {self.current_hand} Starter: {self.starter_card}"
 
-    def get_greedy_hand(self):
-        rewards = []
+    def get_greedy_action(self, player="agent"):
+        
+        assert player in ["agent", "opponent"]
+        if player == "agent":
+            original_hand = self.current_hand.copy()
+        else:
+            original_hand = self.opponent_hand.copy()
+
+        scores = []
         for action in range(len(self.potential_moves)):
-            original_hand, hand_after_discard, reward = self.discard(action)
-            self.current_hand = self.dealt_hand.copy()
-            rewards.append(reward)
+            score = self.discard(original_hand, self.starter_card, action)
+            scores.append(score)
 
-        best_action = np.argmax(rewards)
+        best_action = np.argmax(scores)
 
-        return self.discard(best_action)
+        return best_action
 
-    def discard(self, action) -> tuple:
+    def discard(self, hand, starter_card, action) -> tuple:
+        """
+        Discards 2 cards from a hand based on an action
+
+        action: int
+            Index of the action to take.
+        player: str
+            'current' or 'opponent'
+
+        Returns
+        -------
+        tuple[list, list, int]
+            The dealt hand, the hand after discarding and the score.
+        """
+        tmp_hand = hand.copy()
         cards_to_discard: tuple[int, int] = self.potential_moves[action]
         for index_to_delete in cards_to_discard:
-            self.current_hand[index_to_delete] = None
+
+            tmp_hand[index_to_delete] = None
 
         hand_after_discard: list[tuple] = [
-            card for card in self.current_hand if card is not None
-        ]
-
-        reward, msg = cribbage_scorer.show_calc_score(
-            self.starter_card,
+                card for card in tmp_hand if card is not None
+            ]
+        
+        score, msg = cribbage_scorer.show_calc_score(
+            starter_card,
             hand_after_discard,
             crib=False,
         )
-        return self.dealt_hand, hand_after_discard, reward
+        return score
 
     def discard_cards(self, action: np.integer) -> tuple[list, list]:
 
@@ -212,9 +236,18 @@ class CribbageEnv(gym.Env):
         self.player_score += points_from_hand
         agent_round_score += points_from_hand
 
-        self.opponent_crib = random.sample(
-            self.opponent_hand, CARDS_TO_DISCARD
-        )
+        if self.opponent_type == "random":
+            self.opponent_crib = random.sample(
+                self.opponent_hand, CARDS_TO_DISCARD
+            )
+        elif self.opponent_type == "greedy":
+            best_action = self.get_greedy_action(player="opponent")
+            indexes_to_discard = self.potential_moves[best_action]
+
+            self.opponent_crib = [self.opponent_hand[index] for index in indexes_to_discard]
+        else:
+            raise ValueError("Invalid opponent type")
+        
         remaining_opponent_hand = set(self.opponent_hand) - set(
             self.opponent_crib
         )
@@ -306,7 +339,7 @@ def run(
             action = current_environment.action_space.sample()
         elif model == "greedy":
             current_environment.reset()
-            _, _, points = current_environment.get_greedy_hand()
+            _, _, points = current_environment.get_greedy_action()
             cribbage_points.append(points)
         elif isinstance(model, BaseAlgorithm):
             action, _ = model.predict(observation, deterministic=True)
@@ -349,10 +382,10 @@ def get_deck() -> list[tuple[int, str]]:
     return deck
 
 
-def train(total_timesteps=10_000):
+def train(total_timesteps=10_000, opponent_type='random'):
     print("Starting training...")
 
-    current_environment = CribbageEnv()
+    current_environment = CribbageEnv(opponent_type=opponent_type)
     model = PPO(
         "MultiInputPolicy",
         current_environment,
@@ -394,30 +427,28 @@ if __name__ == "__main__":
     print("Getting reference scores...")
 
     evaluation_steps: int = 100_000
-    # total_timesteps: int = 100_000
-    training_steps: int = 1_000
+    training_steps: int = 100_000
 
-    start = time.time()
-    model = train(training_steps)
-    print("Training time:", time.time() - start)
 
-    # model_close_look(model)
+    for opponent_type in ["random", "greedy"]:
+        print(f"Opponent type: {opponent_type}")
 
-    model_round_score, model_win_rate = run(model, run_steps=evaluation_steps)
-    random_round_score, random_win_rate = run(
-        model="random", run_steps=evaluation_steps
-    )
-    print(f"{model_win_rate=}")
-    print(f"{random_win_rate=}")
+        start = time.time()
+        model = train(training_steps, opponent_type=opponent_type)
+        print("Training time:", time.time() - start)
 
-    # greedy_rewards: list[int] = run(model="greedy", run_steps=run_steps)
+        model_round_score, model_win_rate = run(model, run_steps=evaluation_steps)
+        random_round_score, random_win_rate = run(
+            model="random", run_steps=evaluation_steps
+        )
+        print(f"{model_win_rate=}")
+        print(f"{random_win_rate=}")
 
-    print(f"{np.mean(model_round_score)=}")
-    print(f"{np.mean(random_round_score)=}")
-    # print(f"{np.mean(greedy_rewards)=}")
+        print(f"{np.mean(model_round_score)=}")
+        print(f"{np.mean(random_round_score)=}")
 
-    ax = sns.boxplot(
-        data=pd.DataFrame(
+        ax = sns.boxplot(
+            data=pd.DataFrame(
             {
                 "approach": ["random" for _ in range(len(random_round_score))]
                 # + ["greedy" for _ in range(len(greedy_rewards))]
@@ -427,19 +458,25 @@ if __name__ == "__main__":
         ),
         x="score",
         y="approach",
-    )
-    plt.savefig("round_scores.png")
-    plt.clf()
+        )
+        plt.savefig(f"{opponent_type}_round_scores.png")
+        plt.clf()
 
-    axes = sns.barplot(
-        data=pd.DataFrame(
+        axes = sns.barplot(
+            data=pd.DataFrame(
             {
                 "approach": ["model", "random"],
                 "win_rate": [model_win_rate, random_win_rate],
             }
         ),
-        x="approach",
-        y="win_rate",
-    )
-    plt.savefig("win_rate.png")
-    # plt.show()
+            x="approach",
+            y="win_rate",
+        )
+        plt.savefig(f"{opponent_type}_win_rate.png")
+
+        plt.clf()
+
+        print("\n")
+        print("\n")
+        print("\n")
+    
