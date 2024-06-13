@@ -66,7 +66,6 @@ class CribbageEnv(gym.Env):
         self.opponent_score: int = 0
 
         info: dict = {}
-        # TODO: Temporal workaround.
         self.start_round()
         return self.encode_observation(), info
 
@@ -135,7 +134,7 @@ class CribbageEnv(gym.Env):
         )
         return self.dealt_hand, hand_after_discard, reward
 
-    def discard_cards(self, action: np.integer):
+    def discard_cards(self, action: np.integer) -> tuple[list, list]:
 
         discarded_cards: list[tuple[int, str]] = []
 
@@ -145,7 +144,7 @@ class CribbageEnv(gym.Env):
             discarded_cards.append(self.current_hand[index_to_delete])
             self.current_hand[index_to_delete] = None
 
-        hand_after_discard: list = [
+        hand_after_discard: list[tuple[int, str]] = [
             card for card in self.current_hand if card is not None
         ]
 
@@ -198,7 +197,7 @@ class CribbageEnv(gym.Env):
             f"{opponent_message=}"
         )
         # TODO: Temporary workaround.
-        # self.opponent_score += opponent_hand_points
+        self.opponent_score += opponent_hand_points
 
         crib_cards: list[tuple[int, str]] = (
             self.opponent_crib + discarded_cards
@@ -209,15 +208,14 @@ class CribbageEnv(gym.Env):
             crib=True,
         )
 
-        terminated: bool = False
-
         info: dict = {}
         if not self.is_dealer:
             self.opponent_score += points_from_crib
         else:
             self.player_score += points_from_crib
 
-        if self.opponent_score > TARGET_SCORE:
+        terminated: bool = False
+        if self.opponent_score >= TARGET_SCORE:
             info[AGENT_VICTORY] = False
             terminated = True
         elif self.player_score > TARGET_SCORE:
@@ -232,7 +230,8 @@ class CribbageEnv(gym.Env):
 
         info[CRIBBAGE_POINTS] = self.player_score
         # TODO: Temporal workaround
-        terminated = True
+        # terminated = True
+        self.start_round()
         return self.encode_observation(), reward, terminated, False, info
 
 
@@ -315,6 +314,8 @@ def get_deck() -> list[tuple[int, str]]:
 
 
 def train(total_timesteps=10_000):
+    print("Starting training...")
+
     current_environment = CribbageEnv()
     model = PPO(
         "MultiInputPolicy",
