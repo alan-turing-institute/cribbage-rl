@@ -1,5 +1,7 @@
 from itertools import combinations
 
+from cython.parallel import prange
+
 from tqdm import tqdm
 
 from scorer import score_hand
@@ -13,7 +15,8 @@ def get_best_action(hand_cards, is_dealer):
     total_counts = (52 - 6) * (52 - 7) * (52 - 8)
     pbar = tqdm(total=len(POSSIBLE_ACTIONS) * (52 - 6))
     card_deck = [(x % 13, x // 13) for x in range(52)]
-    for drop_choice in POSSIBLE_ACTIONS:
+    for i in prange(len(POSSIBLE_ACTIONS))
+        drop_choice = POSSIBLE_ACTIONS[i]
         hand_choices = [
             card for i, card in enumerate(hand_cards) if i not in drop_choice
         ]
