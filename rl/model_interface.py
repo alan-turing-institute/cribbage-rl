@@ -25,11 +25,17 @@ def run(model_file):
         is_dealer = click.prompt("Are you dealer? ", type=bool)
 
         for i in range(1, 7):
-            card_suit = click.prompt(f"Card {i} suit: ", type=str)
+            card_choice = click.prompt(f"Card {i} suit then rank: ", type=str)
+            if len(card_choice) < 2 or len(card_choice) > 4:
+                click.echo(
+                    f"Invalid suit and rank: {card_choice}, please use format 'D 1'"
+                )
+                raise click.Abort()
+            card_suit = card_choice[0]
+            card_rank = int(card_choice[1:])
             if card_suit not in ALL_SUITS:
                 click.echo(f"Invalid suit: {card_suit}, please use one of {ALL_SUITS}")
                 raise click.Abort()
-            card_rank = click.prompt(f"Card {i} rank: ", type=int)
             if card_rank < 1 or card_rank > 13:
                 click.echo(
                     f"Invalid rank: {card_rank}, please use a number between 1 and 13"
