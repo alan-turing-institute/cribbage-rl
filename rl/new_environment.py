@@ -260,7 +260,7 @@ def encode_card(card: Optional[tuple[int, str]]) -> Optional[np.ndarray]:
 
 def run(
     model: Union[str, BaseAlgorithm] = "random", run_steps: int = 5
-) -> list[int]:
+) -> tuple[list[int], float]:
 
     assert model in ["random", "greedy"] or isinstance(model, PPO)
 
@@ -302,7 +302,7 @@ def run(
             observation, info = current_environment.reset()
 
     win_rate = sum(agent_wins) / len(agent_wins)
-    print(sum(agent_wins))
+    print(f"{sum(agent_wins)=}")
 
     return cribbage_points, win_rate
 
@@ -360,7 +360,8 @@ def model_close_look(model):
 if __name__ == "__main__":
     print("Getting reference scores...")
 
-    run_steps: int = 1000
+    run_steps: int = 10000
+    # total_timesteps: int = 100_000
     total_timesteps: int = 100_000
 
     start = time.time()
@@ -371,6 +372,9 @@ if __name__ == "__main__":
 
     model_rewards, model_win_rate = run(model, run_steps=run_steps)
     random_rewards, random_win_rate = run(model="random", run_steps=run_steps)
+    print(f"{model_win_rate=}")
+    print(f"{random_win_rate=}")
+
     # greedy_rewards: list[int] = run(model="greedy", run_steps=run_steps)
 
     print(f"{np.mean(model_rewards)=}")
@@ -380,12 +384,21 @@ if __name__ == "__main__":
     data: pd.DataFrame = pd.DataFrame(
         {
             "approach": ["random" for _ in range(len(random_rewards))]
-            #+ ["greedy" for _ in range(len(greedy_rewards))]
+            # + ["greedy" for _ in range(len(greedy_rewards))]
             + ["model" for _ in range(len(model_rewards))],
-            "score": random_rewards  + model_rewards,
+            "score": random_rewards + model_rewards,
         }
     )
 
-    axes = sns.boxplot(data=data, x="score", y="approach")
+    axes = sns.barplot(
+        data=pd.DataFrame(
+            {
+                "approach": ["model", "random"],
+                "win_rate": [model_win_rate, random_win_rate],
+            }
+        ),
+        x="approach",
+        y="win_rate",
+    )
     plt.savefig("reward_plot.png")
-    plt.show()
+    # plt.show()
