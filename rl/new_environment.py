@@ -22,7 +22,7 @@ CRIBBAGE_POINTS: str = "cribbage_points"
 AGENT_PLAYER: str = "agent"
 OPPONENT_PLAYER: str = "opponent"
 
-TARGET_SCORE: int = 131
+TARGET_SCORE: int = 121
 AGENT_VICTORY: str = "agent_victory"
 
 SUIT_TO_NUMBER: dict[str, int] = {
@@ -217,10 +217,10 @@ class CribbageEnv(gym.Env):
         else:
             self.player_score += points_from_crib
 
-        if self.opponent_score >= TARGET_SCORE:
+        if self.opponent_score > TARGET_SCORE:
             info[AGENT_VICTORY] = False
             terminated = True
-        elif self.player_score >= TARGET_SCORE:
+        elif self.player_score > TARGET_SCORE:
             info[AGENT_VICTORY] = True
             terminated = True
 
@@ -266,7 +266,7 @@ def run(
     observation, info = current_environment.reset()
 
     cribbage_points: list[int] = []
-
+    agent_wins = []
     for _ in range(run_steps):
         if model == "random":
             # Random action
@@ -283,6 +283,9 @@ def run(
                 current_environment.step(action)
             )
 
+            if terminated:
+                agent_wins.append(info[AGENT_VICTORY])
+
             cribbage_points.append(info[CRIBBAGE_POINTS])
         else:
             # CGC: Why are you setting these to False? Resetting triggers
@@ -296,7 +299,10 @@ def run(
         if terminated or truncated:
             observation, info = current_environment.reset()
 
-    return cribbage_points
+    win_rate = sum(agent_wins) / len(agent_wins)
+    print(sum(agent_wins))
+
+    return cribbage_points, win_rate
 
 
 def get_deck() -> list[tuple[int, str]]:
@@ -359,20 +365,20 @@ if __name__ == "__main__":
 
     # model_close_look(model)
 
-    model_rewards: list[int] = run(model, run_steps=run_steps)
-    random_rewards: list[int] = run(model="random", run_steps=run_steps)
-    greedy_rewards: list[int] = run(model="greedy", run_steps=run_steps)
+    model_rewards, model_win_rate = run(model, run_steps=run_steps)
+    random_rewards, random_win_rate = run(model="random", run_steps=run_steps)
+    # greedy_rewards: list[int] = run(model="greedy", run_steps=run_steps)
 
     print(f"{np.mean(model_rewards)=}")
     print(f"{np.mean(random_rewards)=}")
-    print(f"{np.mean(greedy_rewards)=}")
+    # print(f"{np.mean(greedy_rewards)=}")
 
     data: pd.DataFrame = pd.DataFrame(
         {
             "approach": ["random" for _ in range(len(random_rewards))]
-            + ["greedy" for _ in range(len(greedy_rewards))]
+            #+ ["greedy" for _ in range(len(greedy_rewards))]
             + ["model" for _ in range(len(model_rewards))],
-            "score": random_rewards + greedy_rewards + model_rewards,
+            "score": random_rewards  + model_rewards,
         }
     )
 
