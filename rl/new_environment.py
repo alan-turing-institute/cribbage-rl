@@ -21,10 +21,12 @@ ALL_SUITS: Final[list[str]] = ["D", "S", "C", "H"]
 CRIBBAGE_POINTS: str = "cribbage_points"
 AGENT_PLAYER: str = "agent"
 OPPONENT_PLAYER: str = "opponent"
+AGENT_ROUND_SCORE: str = "agent_round_score"
+OPPONENT_ROUND_SCORE: str = "opponent_round_score"
 
 TARGET_SCORE: int = 121
 AGENT_VICTORY: str = "agent_victory"
-
+IS_DEALER = "is_dealer"
 SUIT_TO_NUMBER: dict[str, int] = {
     suit: index for index, suit in enumerate(ALL_SUITS)
 }
@@ -153,12 +155,33 @@ class CribbageEnv(gym.Env):
 
         return hand_after_discard, discarded_cards
 
+    def check_if_there_is_a_winner(self, info):
+        terminated = False
+        if not self.is_dealer:
+            if self.player_score > TARGET_SCORE:
+                info[AGENT_VICTORY] = True
+                terminated = True
+            elif self.opponent_score > TARGET_SCORE:
+                info[AGENT_VICTORY] = False
+                terminated = True
+        else:
+            if self.opponent_score > TARGET_SCORE:
+                info[AGENT_VICTORY] = False
+                terminated = True
+            elif self.player_score > TARGET_SCORE:
+                info[AGENT_VICTORY] = True
+                terminated = True
+        return info, terminated
+
     def step(self, action: Union[np.integer, np.ndarray]) -> tuple:
         # self.start_round()
 
         logging.debug(f"{action=}")
         logging.debug(f"{self.starter_card=}")
         logging.debug(f"{self.current_hand=}")
+
+        agent_round_score = 0
+        opponent_round_score = 0
 
         cut_scores, cut_msg = cribbage_scorer.cut_calc_score(
             self.starter_card,
@@ -169,6 +192,8 @@ class CribbageEnv(gym.Env):
         logging.debug(f"{cut_scores=}")
         self.player_score += cut_scores[AGENT_PLAYER]
         self.opponent_score += cut_scores[OPPONENT_PLAYER]
+        agent_round_score += cut_scores[AGENT_PLAYER]
+        opponent_round_score += cut_scores[OPPONENT_PLAYER]
 
         action = action if isinstance(action, np.integer) else action[0]
         hand_after_discard, discarded_cards = self.discard_cards(action)
@@ -181,6 +206,7 @@ class CribbageEnv(gym.Env):
         )
         logging.info(f"{msg=}")
         self.player_score += points_from_hand
+        agent_round_score += points_from_hand
 
         self.opponent_crib = random.sample(
             self.opponent_hand, CARDS_TO_DISCARD
@@ -201,6 +227,7 @@ class CribbageEnv(gym.Env):
         )
         # TODO: Temporary workaround.
         self.opponent_score += opponent_hand_points
+        opponent_round_score += opponent_hand_points
 
         crib_cards: list[tuple[int, str]] = (
             self.opponent_crib + discarded_cards
@@ -214,26 +241,12 @@ class CribbageEnv(gym.Env):
         info: dict = {}
         if not self.is_dealer:
             self.opponent_score += points_from_crib
+            opponent_round_score += points_from_crib
         else:
             self.player_score += points_from_crib
+            agent_round_score += points_from_crib
 
-        terminated: bool = False
-
-        # If agent isn't dealer, count agent's first.
-        if not self.is_dealer:
-            if self.player_score > TARGET_SCORE:
-                info[AGENT_VICTORY] = True
-                terminated = True
-            elif self.opponent_score > TARGET_SCORE:
-                info[AGENT_VICTORY] = False
-                terminated = True
-        else:
-            if self.opponent_score > TARGET_SCORE:
-                info[AGENT_VICTORY] = False
-                terminated = True
-            elif self.player_score > TARGET_SCORE:
-                info[AGENT_VICTORY] = True
-                terminated = True
+        info, terminated = self.check_if_there_is_a_winner(info)
 
         reward: int = self.player_score - self.opponent_score
         logging.debug(
@@ -242,6 +255,9 @@ class CribbageEnv(gym.Env):
         )
 
         info[CRIBBAGE_POINTS] = self.player_score
+        info[IS_DEALER] = self.is_dealer
+        info[AGENT_ROUND_SCORE] = agent_round_score
+        info[OPPONENT_ROUND_SCORE] = opponent_round_score
         # TODO: Temporal workaround
         # terminated = True
         self.start_round()
@@ -299,7 +315,8 @@ def run(
             if terminated:
                 agent_wins.append(info[AGENT_VICTORY])
 
-            cribbage_points.append(info[CRIBBAGE_POINTS])
+            cribbage_points.append(info[AGENT_ROUND_SCORE])
+
         else:
             # CGC: Why are you setting these to False? Resetting triggers
             # shuffling .
@@ -372,35 +389,43 @@ def model_close_look(model):
 if __name__ == "__main__":
     print("Getting reference scores...")
 
-    run_steps: int = 1_000
+    evaluation_steps: int = 100_000
     # total_timesteps: int = 100_000
-    total_timesteps: int = 100_000
+    training_steps: int = 1_000_000
 
     start = time.time()
-    model = train(total_timesteps)
+    model = train(training_steps)
     print("Training time:", time.time() - start)
 
     # model_close_look(model)
 
-    model_rewards, model_win_rate = run(model, run_steps=run_steps)
-    random_rewards, random_win_rate = run(model="random", run_steps=run_steps)
+    model_round_score, model_win_rate = run(model, run_steps=evaluation_steps)
+    random_round_score, random_win_rate = run(
+        model="random", run_steps=evaluation_steps
+    )
     print(f"{model_win_rate=}")
     print(f"{random_win_rate=}")
 
     # greedy_rewards: list[int] = run(model="greedy", run_steps=run_steps)
 
-    print(f"{np.mean(model_rewards)=}")
-    print(f"{np.mean(random_rewards)=}")
+    print(f"{np.mean(model_round_score)=}")
+    print(f"{np.mean(random_round_score)=}")
     # print(f"{np.mean(greedy_rewards)=}")
 
-    data: pd.DataFrame = pd.DataFrame(
-        {
-            "approach": ["random" for _ in range(len(random_rewards))]
-            # + ["greedy" for _ in range(len(greedy_rewards))]
-            + ["model" for _ in range(len(model_rewards))],
-            "score": random_rewards + model_rewards,
-        }
+    ax = sns.boxplot(
+        data=pd.DataFrame(
+            {
+                "approach": ["random" for _ in range(len(random_round_score))]
+                # + ["greedy" for _ in range(len(greedy_rewards))]
+                + ["model" for _ in range(len(model_round_score))],
+                "score": random_round_score + model_round_score,
+            }
+        ),
+        x="score",
+        y="approach",
     )
+    plt.savefig("round_scores.png")
+    plt.clf()
 
     axes = sns.barplot(
         data=pd.DataFrame(
@@ -412,5 +437,5 @@ if __name__ == "__main__":
         x="approach",
         y="win_rate",
     )
-    plt.savefig("reward_plot.png")
+    plt.savefig("win_rate.png")
     # plt.show()
