@@ -102,3 +102,7 @@ ENV/
 
 # IntelliJ
 .idea/
+
+rl/cribbage_tensorboard_log/*
+cribbage_tensorboard_log/*
+saved_models/*
