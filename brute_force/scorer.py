@@ -5,8 +5,10 @@ Adapted from https://github.com/DubThink/cribbageksi
 import heapq
 import math
 from itertools import combinations
-from cribbage.deck import peg_val
 from copy import deepcopy
+
+def peg_val(card):
+    return 10 if card[0]>10 else card[0]
 
 def score_hand(hand4cards, cutcard, is_crib=False):
     """
