@@ -22,7 +22,7 @@ CRIBBAGE_POINTS: str = "cribbage_points"
 AGENT_PLAYER: str = "agent"
 OPPONENT_PLAYER: str = "opponent"
 
-TARGET_SCORE: int = 131
+TARGET_SCORE: int = 121
 AGENT_VICTORY: str = "agent_victory"
 
 SUIT_TO_NUMBER: dict[str, int] = {
@@ -66,7 +66,6 @@ class CribbageEnv(gym.Env):
         self.opponent_score: int = 0
 
         info: dict = {}
-        # TODO: Temporal workaround.
         self.start_round()
         return self.encode_observation(), info
 
@@ -89,7 +88,10 @@ class CribbageEnv(gym.Env):
         if self.is_dealer is None:
             self.is_dealer = random.choice([0, 1])
         else:
-            self.is_dealer = 0 if self.is_dealer == 1 else 0
+            if self.is_dealer == 0:
+                self.is_dealer = 1
+            else:
+                self.is_dealer = 0
 
     def encode_observation(
         self,
@@ -135,7 +137,7 @@ class CribbageEnv(gym.Env):
         )
         return self.dealt_hand, hand_after_discard, reward
 
-    def discard_cards(self, action: np.integer):
+    def discard_cards(self, action: np.integer) -> tuple[list, list]:
 
         discarded_cards: list[tuple[int, str]] = []
 
@@ -145,7 +147,7 @@ class CribbageEnv(gym.Env):
             discarded_cards.append(self.current_hand[index_to_delete])
             self.current_hand[index_to_delete] = None
 
-        hand_after_discard: list = [
+        hand_after_discard: list[tuple[int, str]] = [
             card for card in self.current_hand if card is not None
         ]
 
@@ -198,7 +200,7 @@ class CribbageEnv(gym.Env):
             f"{opponent_message=}"
         )
         # TODO: Temporary workaround.
-        # self.opponent_score += opponent_hand_points
+        self.opponent_score += opponent_hand_points
 
         crib_cards: list[tuple[int, str]] = (
             self.opponent_crib + discarded_cards
@@ -209,18 +211,17 @@ class CribbageEnv(gym.Env):
             crib=True,
         )
 
-        terminated: bool = False
-
         info: dict = {}
         if not self.is_dealer:
             self.opponent_score += points_from_crib
         else:
             self.player_score += points_from_crib
 
+        terminated: bool = False
         if self.opponent_score >= TARGET_SCORE:
             info[AGENT_VICTORY] = False
             terminated = True
-        elif self.player_score >= TARGET_SCORE:
+        elif self.player_score > TARGET_SCORE:
             info[AGENT_VICTORY] = True
             terminated = True
 
@@ -232,7 +233,8 @@ class CribbageEnv(gym.Env):
 
         info[CRIBBAGE_POINTS] = self.player_score
         # TODO: Temporal workaround
-        terminated = True
+        # terminated = True
+        self.start_round()
         return self.encode_observation(), reward, terminated, False, info
 
 
@@ -266,7 +268,7 @@ def run(
     observation, info = current_environment.reset()
 
     cribbage_points: list[int] = []
-
+    agent_wins = []
     for _ in range(run_steps):
         if model == "random":
             # Random action
@@ -283,6 +285,9 @@ def run(
                 current_environment.step(action)
             )
 
+            if terminated:
+                agent_wins.append(info[AGENT_VICTORY])
+
             cribbage_points.append(info[CRIBBAGE_POINTS])
         else:
             # CGC: Why are you setting these to False? Resetting triggers
@@ -296,7 +301,10 @@ def run(
         if terminated or truncated:
             observation, info = current_environment.reset()
 
-    return cribbage_points
+    win_rate = sum(agent_wins) / len(agent_wins)
+    print(sum(agent_wins))
+
+    return cribbage_points, win_rate
 
 
 def get_deck() -> list[tuple[int, str]]:
@@ -309,6 +317,8 @@ def get_deck() -> list[tuple[int, str]]:
 
 
 def train(total_timesteps=10_000):
+    print("Starting training...")
+
     current_environment = CribbageEnv()
     model = PPO(
         "MultiInputPolicy",
@@ -359,20 +369,20 @@ if __name__ == "__main__":
 
     # model_close_look(model)
 
-    model_rewards: list[int] = run(model, run_steps=run_steps)
-    random_rewards: list[int] = run(model="random", run_steps=run_steps)
-    greedy_rewards: list[int] = run(model="greedy", run_steps=run_steps)
+    model_rewards, model_win_rate = run(model, run_steps=run_steps)
+    random_rewards, random_win_rate = run(model="random", run_steps=run_steps)
+    # greedy_rewards: list[int] = run(model="greedy", run_steps=run_steps)
 
     print(f"{np.mean(model_rewards)=}")
     print(f"{np.mean(random_rewards)=}")
-    print(f"{np.mean(greedy_rewards)=}")
+    # print(f"{np.mean(greedy_rewards)=}")
 
     data: pd.DataFrame = pd.DataFrame(
         {
             "approach": ["random" for _ in range(len(random_rewards))]
-            + ["greedy" for _ in range(len(greedy_rewards))]
+            #+ ["greedy" for _ in range(len(greedy_rewards))]
             + ["model" for _ in range(len(model_rewards))],
-            "score": random_rewards + greedy_rewards + model_rewards,
+            "score": random_rewards  + model_rewards,
         }
     )
 
