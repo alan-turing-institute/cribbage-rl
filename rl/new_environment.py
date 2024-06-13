@@ -35,7 +35,9 @@ SUIT_TO_NUMBER: dict[str, int] = {
 class CribbageEnv(gym.Env):
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self, render_mode=None, size=5, opponent_type='random') -> None:
+    def __init__(
+        self, render_mode=None, size=5, opponent_type="random"
+    ) -> None:
 
         self.observation_space = spaces.Dict(
             {
@@ -50,7 +52,9 @@ class CribbageEnv(gym.Env):
                 },
             }
         )
-        self.observation_space["game_score_different"] = spaces.Discrete(242, start=-TARGET_SCORE)
+        self.observation_space["game_score_different"] = spaces.Discrete(
+            242, start=-TARGET_SCORE
+        )
 
         self.opponent_type = opponent_type
         assert self.opponent_type in ["random", "greedy"]
@@ -120,7 +124,7 @@ class CribbageEnv(gym.Env):
         return f"Hand: {self.current_hand} Starter: {self.starter_card}"
 
     def get_greedy_action(self, player="agent"):
-        
+
         assert player in ["agent", "opponent"]
         if player == "agent":
             original_hand = self.current_hand.copy()
@@ -157,9 +161,9 @@ class CribbageEnv(gym.Env):
             tmp_hand[index_to_delete] = None
 
         hand_after_discard: list[tuple] = [
-                card for card in tmp_hand if card is not None
-            ]
-        
+            card for card in tmp_hand if card is not None
+        ]
+
         score, msg = cribbage_scorer.show_calc_score(
             starter_card,
             hand_after_discard,
@@ -244,10 +248,12 @@ class CribbageEnv(gym.Env):
             best_action = self.get_greedy_action(player="opponent")
             indexes_to_discard = self.potential_moves[best_action]
 
-            self.opponent_crib = [self.opponent_hand[index] for index in indexes_to_discard]
+            self.opponent_crib = [
+                self.opponent_hand[index] for index in indexes_to_discard
+            ]
         else:
             raise ValueError("Invalid opponent type")
-        
+
         remaining_opponent_hand = set(self.opponent_hand) - set(
             self.opponent_crib
         )
@@ -338,30 +344,18 @@ def run(
             # Random action
             action = current_environment.action_space.sample()
         elif model == "greedy":
-            current_environment.reset()
-            _, _, points = current_environment.get_greedy_action()
-            cribbage_points.append(points)
+            action = current_environment.get_greedy_action(player="agent")
         elif isinstance(model, BaseAlgorithm):
             action, _ = model.predict(observation, deterministic=True)
 
-        if model != "greedy":
-            observation, reward, terminated, truncated, info = (
-                current_environment.step(action)
-            )
+        observation, _, terminated, truncated, info = current_environment.step(
+            action
+        )
 
-            if terminated:
-                agent_wins.append(info[AGENT_VICTORY])
+        if terminated:
+            agent_wins.append(info[AGENT_VICTORY])
 
-            cribbage_points.append(info[AGENT_ROUND_SCORE])
-
-        else:
-            # CGC: Why are you setting these to False? Resetting triggers
-            # shuffling .
-            terminated = False
-            truncated = False
-            info = {}
-
-        # current_environment.render()
+        cribbage_points.append(info[AGENT_ROUND_SCORE])
 
         if terminated or truncated:
             observation, info = current_environment.reset()
@@ -382,7 +376,7 @@ def get_deck() -> list[tuple[int, str]]:
     return deck
 
 
-def train(total_timesteps=10_000, opponent_type='random'):
+def train(total_timesteps=10_000, opponent_type="random"):
     print("Starting training...")
 
     current_environment = CribbageEnv(opponent_type=opponent_type)
@@ -423,60 +417,68 @@ def model_close_look(model):
     )
 
 
+def evaluate(
+    models: dict[str, Union[BaseAlgorithm, str]], evaluation_steps: int
+) -> None:
+
+    boxplot_data: dict[str, list] = {"approach": [], "score": []}
+    win_rate_data: dict = {"approach": [], "win_rate": []}
+
+    for model_name, model in models.items():
+        model_round_scores, model_win_rate = run(
+            model, run_steps=evaluation_steps
+        )
+        boxplot_data["approach"] += [
+            model_name for _ in range(len(model_round_scores))
+        ]
+        boxplot_data["score"] += model_round_scores
+
+        win_rate_data["approach"] += [model_name]
+        win_rate_data["win_rate"] += [model_win_rate]
+
+    sns.boxplot(
+        data=pd.DataFrame(boxplot_data),
+        x="score",
+        y="approach",
+    )
+    plt.savefig("consolidated_round_scores.png")
+    plt.clf()
+
+    sns.barplot(
+        data=pd.DataFrame(win_rate_data),
+        x="approach",
+        y="win_rate",
+    )
+    plt.savefig(f"consolidated_win_rate.png")
+
+    plt.clf()
+
+    print("\n")
+    print("\n")
+    print("\n")
+
+
 if __name__ == "__main__":
     print("Getting reference scores...")
 
-    evaluation_steps: int = 100_000
-    training_steps: int = 100_000
+    # evaluation_steps: int = 100_000
+    # training_steps: int = 100_000
 
+    evaluation_steps: int = 1000
+    training_steps: int = 1000
+
+    models: dict[str, Union[BaseAlgorithm, str]] = {}
 
     for opponent_type in ["random", "greedy"]:
         print(f"Opponent type: {opponent_type}")
 
         start = time.time()
-        model = train(training_steps, opponent_type=opponent_type)
+        models[f"{opponent_type}_train"] = train(
+            training_steps, opponent_type=opponent_type
+        )
         print("Training time:", time.time() - start)
 
-        model_round_score, model_win_rate = run(model, run_steps=evaluation_steps)
-        random_round_score, random_win_rate = run(
-            model="random", run_steps=evaluation_steps
-        )
-        print(f"{model_win_rate=}")
-        print(f"{random_win_rate=}")
+    models["ran_eval"] = "random"
+    models["greed_eval"] = "greedy"
 
-        print(f"{np.mean(model_round_score)=}")
-        print(f"{np.mean(random_round_score)=}")
-
-        ax = sns.boxplot(
-            data=pd.DataFrame(
-            {
-                "approach": ["random" for _ in range(len(random_round_score))]
-                # + ["greedy" for _ in range(len(greedy_rewards))]
-                + ["model" for _ in range(len(model_round_score))],
-                "score": random_round_score + model_round_score,
-            }
-        ),
-        x="score",
-        y="approach",
-        )
-        plt.savefig(f"{opponent_type}_round_scores.png")
-        plt.clf()
-
-        axes = sns.barplot(
-            data=pd.DataFrame(
-            {
-                "approach": ["model", "random"],
-                "win_rate": [model_win_rate, random_win_rate],
-            }
-        ),
-            x="approach",
-            y="win_rate",
-        )
-        plt.savefig(f"{opponent_type}_win_rate.png")
-
-        plt.clf()
-
-        print("\n")
-        print("\n")
-        print("\n")
-    
+    evaluate(models, evaluation_steps)
