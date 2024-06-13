@@ -1,47 +1,28 @@
 from functools import cache
-from typing import Iterable, Callable
-
-SAMPLES = 10
+from typing import Iterable, Callable, Optional
 
 
-def strategy1() -> tuple[int, int]:
-    return 1, 0
-
-
-def strategy2() -> tuple[int, int]:
-    return 0, 1
-
-
-strategies: Iterable[Callable[[], tuple[int, int]]] = [
-    strategy1,
-    strategy2,
-]
+strategies: Optional[Iterable[Callable[[], int]]] = None
 
 
 @cache
-def evaluate_strategies(scores: tuple[int, int], target: int) -> list[float]:
+def evaluate_strategies(scores: tuple[int, int], target: int, samples) -> list[float]:
+    assert strategies is not None
     win_rates = []
     for strategy in strategies:
         wins = 0.0
-        draws = 0.0
-        for _ in range(SAMPLES):
-            my_score, their_score = strategy()
-            new_scores = scores[0] + my_score, scores[1] + their_score
-            if new_scores[0] > target:
-                # win or draw
-                if new_scores[1] > target:
-                    # draw
-                    draws += 1.0
-                else:
-                    # win
-                    wins += 1.0
-            elif new_scores[1] > target:
-                # loss
-                pass
+        for _ in range(samples):
+            my_score = strategy()
+            if my_score + scores[0] >= target:
+                wins += 1.0
             else:
-                # another round
-                wins += max(evaluate_strategies(new_scores, target))
-        win_rates.append(wins / SAMPLES)
+                # another round, this time the opponent goes first
+                wins += 1 - max(
+                    evaluate_strategies(
+                        (scores[1], scores[0] + my_score), target, samples
+                    )
+                )
+        win_rates.append(wins / samples)
     return win_rates
 
 
