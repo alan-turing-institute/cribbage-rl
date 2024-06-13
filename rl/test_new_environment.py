@@ -1,11 +1,12 @@
 from unittest import TestCase, main
+from typing import Final
 
 import numpy as np
 
 from new_environment import CribbageEnv
 
 class TestNewEnvironment(TestCase):
-    hand_one = [
+    hand_one: Final[list[tuple[int, str]]] = [
         (1, "S"),
         (2, "S"),
         (3, "S"),
@@ -21,6 +22,16 @@ class TestNewEnvironment(TestCase):
         environment.starter_card = (10, "C")
         self.env = environment
 
+    def test_get_greedy_hand_with_crib(self):
+        self.env.is_dealer = 1
+        self.env.opponent_crib = [
+            (6, "D"),
+            (10, "H"),
+        ]
+
+        actual = self.env.get_greedy_reward_with_crib()
+        expected = 19
+        self.assertEqual(actual, expected)
 
     def test_get_greedy_hand(self):
         actual_original, actual_kept, actual_score = self.env.get_greedy_hand()
