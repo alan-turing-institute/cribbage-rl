@@ -12,7 +12,7 @@ strategies: Optional[Iterable[Callable[[], int]]] = None
 
 
 def conservative() -> int:
-    scores = 8,
+    scores = 9,
     return random.choices(scores, weights=[1 for _ in scores])[0]
 
 
